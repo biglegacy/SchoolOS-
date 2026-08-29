@@ -1,0 +1,6 @@
+{
+  "name": "SchoolOS Online",
+  "description": "Complete School Management SaaS Platform for Ghanaian Schools with real-time academic, administrative, financial, attendance, POS, and portal operations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

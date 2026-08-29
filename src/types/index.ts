@@ -1,0 +1,520 @@
+export type UserRole = 
+  | 'superAdmin' 
+  | 'schoolOwner' 
+  | 'principal' 
+  | 'teacher' 
+  | 'accountant' 
+  | 'parent' 
+  | 'student';
+
+export type SchoolStatus = 'pending' | 'active' | 'suspended' | 'rejected';
+
+export type SubscriptionPlan = 'basic' | 'standard' | 'premium' | 'starter' | 'enterprise' | string;
+
+export type PlanBillingPeriod = 'term' | 'annual' | 'monthly';
+
+export type FeatureKey =
+  | 'students'
+  | 'teachers'
+  | 'classrooms'
+  | 'subjects'
+  | 'attendance'
+  | 'results'
+  | 'examinations'
+  | 'reports'
+  | 'promotions'
+  | 'fees'
+  | 'store'
+  | 'pos'
+  | 'communications'
+  | 'analytics'
+  | 'users_portals'
+  | 'settings'
+  | 'teacher_portal'
+  | 'parent_portal'
+  | 'student_portal'
+  | 'accountant_portal';
+
+export interface SubscriptionTier {
+  id: string;
+  name: string;
+  code: string;
+  priceGHS: number;
+  billingPeriod: PlanBillingPeriod;
+  description: string;
+  features: FeatureKey[];
+  studentLimit: number;
+  isActive: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface School {
+  id: string;
+  name: string;
+  shortCode?: string;
+  logo?: string;
+  motto?: string;
+  address: string;
+  district: string;
+  region: string; // Greater Accra, Ashanti, Central, Eastern, Western, etc.
+  phone: string;
+  email: string;
+  website?: string;
+  registrationNumber?: string;
+  status: SchoolStatus;
+  subscriptionPlan: SubscriptionPlan;
+  planId?: string;
+  subscriptionExpiry: string;
+  featureOverrides?: Partial<Record<FeatureKey, boolean>>;
+  ownerId?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  ownerPhone?: string;
+  currentAcademicYear: string;
+  currentTerm: 'Term 1' | 'Term 2' | 'Term 3';
+  currency?: string; // 'GHS'
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UserProfile {
+  id: string;
+  uid: string;
+  email: string;
+  username?: string;
+  password?: string;
+  fullName: string;
+  role: UserRole;
+  status?: 'active' | 'inactive';
+  schoolId?: string;
+  schoolName?: string;
+  phone?: string;
+  avatarUrl?: string;
+  teacherId?: string;
+  studentId?: string;
+  linkedStudentIds?: string[]; // For parents
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface Guardian {
+  name: string;
+  relationship: 'Father' | 'Mother' | 'Guardian' | 'Sibling' | 'Other';
+  phone: string;
+  email?: string;
+  occupation?: string;
+  isPrimary?: boolean;
+}
+
+export interface Student {
+  id: string;
+  schoolId: string;
+  admissionNumber: string;
+  firstName: string;
+  lastName: string;
+  otherNames?: string;
+  dateOfBirth: string;
+  gender: 'male' | 'female';
+  ghanaCardNumber?: string; // GHA-XXXXXXXXX-X
+  currentClassroomId: string;
+  classroomName: string;
+  level: string; // "Primary 4", "JHS 2", "Basic 3", etc.
+  admissionDate: string;
+  status: 'active' | 'withdrawn' | 'graduated' | 'suspended';
+  photoUrl?: string;
+  guardians: Guardian[];
+  medicalConditions?: string;
+  allergies?: string;
+  emergencyContact?: {
+    name: string;
+    phone: string;
+  };
+  houseOrTeam?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Teacher {
+  id: string;
+  schoolId: string;
+  userId?: string;
+  staffId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  gender: 'male' | 'female';
+  ghanaCardNumber?: string;
+  qualification: string;
+  specialization?: string;
+  dateJoined: string;
+  status: 'active' | 'on_leave' | 'inactive';
+  assignedClassroomIds: string[];
+  assignedSubjects: Array<{
+    subjectId: string;
+    subjectName: string;
+    classroomId: string;
+    classroomName: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Classroom {
+  id: string;
+  schoolId: string;
+  name: string; // e.g. "Basic 4 Gold", "JHS 2 Green", "KG 2 Alpha"
+  level: string; // "KG 1", "KG 2", "Primary 1".."Primary 6", "JHS 1".."JHS 3", "SHS 1".."SHS 3"
+  section?: string;
+  academicYear: string;
+  term: 'Term 1' | 'Term 2' | 'Term 3';
+  capacity: number;
+  classTeacherId?: string;
+  classTeacherName?: string;
+  studentCount: number;
+  subjects: string[]; // Subject IDs / Names
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Subject {
+  id: string;
+  schoolId: string;
+  name: string;
+  code: string;
+  category: 'Core' | 'Elective' | 'Vocational';
+  createdAt: string;
+}
+
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
+
+export interface AttendanceRecord {
+  id: string;
+  schoolId: string;
+  classroomId: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  date: string; // YYYY-MM-DD
+  status: AttendanceStatus;
+  remarks?: string;
+  term?: string;
+  academicYear?: string;
+  recordedBy?: string;
+  createdAt?: string;
+}
+
+export interface Examination {
+  id: string;
+  schoolId: string;
+  name: string;
+  academicYear: string;
+  term: 'Term 1' | 'Term 2' | 'Term 3';
+  startDate: string;
+  endDate: string;
+  status: 'draft' | 'ongoing' | 'grading' | 'published';
+  targetClassrooms: string[];
+  createdAt: string;
+}
+
+export interface ExaminationResult {
+  id: string;
+  schoolId: string;
+  examinationId?: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  classroomId: string;
+  classroomName: string;
+  subjectId?: string;
+  subjectName: string;
+  classScore: number; // 0-30%
+  examScore: number; // 0-70%
+  totalScore: number; // 0-100%
+  grade: 'A' | 'B+' | 'B' | 'C' | 'D' | 'E' | 'F';
+  gradeRemark: string;
+  position?: number;
+  totalStudents?: number;
+  teacherRemarks?: string;
+  enteredBy?: string;
+  academicYear?: string;
+  term?: 'Term 1' | 'Term 2' | 'Term 3';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TerminalReport {
+  id: string;
+  schoolId: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  classroomId: string;
+  classroomName: string;
+  academicYear: string;
+  term: 'Term 1' | 'Term 2' | 'Term 3';
+  subjects: Array<{
+    subjectName: string;
+    classScore: number;
+    examScore: number;
+    total: number;
+    grade: string;
+    position: number;
+    remarks: string;
+  }>;
+  attendanceSummary: {
+    totalDays: number;
+    daysPresent: number;
+    daysAbsent: number;
+    percentageAttendance: number;
+  };
+  overallAverage: number;
+  overallGrade: string;
+  overallPosition: number;
+  totalStudentsInClass: number;
+  classTeacherRemarks: string;
+  headTeacherRemarks: string;
+  promoted: boolean;
+  nextClass?: string;
+  reopeningDate?: string;
+  dateIssued: string;
+}
+
+export interface FeeItem {
+  id: string;
+  name: string;
+  amount: number;
+  mandatory: boolean;
+}
+
+export interface FeeStructure {
+  id: string;
+  schoolId: string;
+  name: string;
+  classroomId?: string;
+  classroomName?: string;
+  academicYear: string;
+  term: 'Term 1' | 'Term 2' | 'Term 3';
+  items: FeeItem[];
+  totalAmount: number;
+  dueDate: string;
+  createdAt: string;
+}
+
+export type PaymentMethod = 
+  | 'mtn_momo' 
+  | 'telecel_cash' 
+  | 'bank_deposit' 
+  | 'cash' 
+  | 'cheque' 
+  | 'card'
+  | 'momo' 
+  | 'bank';
+
+export interface FeePayment {
+  id: string;
+  schoolId: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber?: string;
+  classroomId?: string;
+  classroomName: string;
+  feeStructureId?: string;
+  receiptNumber?: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  method?: PaymentMethod;
+  transactionReference?: string;
+  reference?: string;
+  payerName: string;
+  payerPhone?: string;
+  recordedBy?: string;
+  receivedBy?: string;
+  paymentDate: string;
+  date?: string;
+  term?: 'Term 1' | 'Term 2' | 'Term 3' | string;
+  academicYear?: string;
+  remarks?: string;
+  notes?: string;
+  createdAt?: string;
+}
+
+export interface StudentFeeSummary {
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  classroomId?: string;
+  classroomName: string;
+  totalBilled: number;
+  totalPaid: number;
+  balance: number;
+  status: 'paid' | 'partial' | 'unpaid' | 'overpaid';
+  lastPaymentDate?: string;
+}
+
+export type ProductCategory = 
+  | 'uniforms' 
+  | 'books' 
+  | 'stationery' 
+  | 'accessories' 
+  | 'other'
+  | 'Uniform' 
+  | 'Textbooks' 
+  | 'Exercise Books' 
+  | 'Stationery' 
+  | 'Accessories' 
+  | 'Canteen';
+
+export interface StoreItem {
+  id: string;
+  schoolId: string;
+  name: string;
+  category: ProductCategory;
+  sku: string;
+  description?: string;
+  costPrice: number;
+  sellingPrice: number;
+  currentStock: number;
+  reorderLevel: number;
+  unit?: string;
+  supplier?: string;
+  status?: string;
+  lastRestocked?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface POSCartItem {
+  item: StoreItem;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface POSReceipt {
+  id: string;
+  schoolId: string;
+  receiptNumber: string;
+  items: Array<{
+    itemId: string;
+    itemName: string;
+    unitPrice: number;
+    quantity: number;
+    totalPrice: number;
+  }>;
+  subtotal: number;
+  totalAmount: number;
+  paymentMethod: PaymentMethod;
+  customerName?: string;
+  studentId?: string;
+  studentName?: string;
+  cashierName: string;
+  timestamp: string;
+  status: 'completed' | 'refunded';
+}
+
+export interface POSTransaction {
+  id: string;
+  schoolId: string;
+  receiptNumber: string;
+  items: Array<{
+    itemId: string;
+    name: string;
+    category?: string;
+    quantity: number;
+    unitPrice: number;
+    subtotal: number;
+  }>;
+  subtotal: number;
+  discount?: number;
+  total: number;
+  paymentMethod: PaymentMethod;
+  amountPaid?: number;
+  changeGiven?: number;
+  customerType?: 'student' | 'guardian' | 'staff' | 'visitor';
+  customerName?: string;
+  studentAdmissionNumber?: string;
+  cashierName: string;
+  date?: string;
+  createdAt: string;
+}
+
+export type SMSBroadcastRecipient = 
+  | 'all_parents' 
+  | 'all_guardians' 
+  | 'fee_defaulters' 
+  | 'all_staff' 
+  | 'staff' 
+  | 'class_parents' 
+  | 'class_guardians' 
+  | 'defaulters' 
+  | 'custom';
+
+export interface BroadcastMessage {
+  id: string;
+  schoolId: string;
+  type: 'sms' | 'whatsapp' | 'announcement';
+  recipientGroup: SMSBroadcastRecipient;
+  targetClassroomId?: string;
+  recipientCount: number;
+  message: string;
+  senderId: string;
+  status: 'delivered' | 'pending' | 'failed';
+  costGHS: number;
+  sentBy: string;
+  sentAt: string;
+}
+
+export interface AuditLog {
+  id: string;
+  schoolId?: string;
+  schoolName?: string;
+  userId: string;
+  userEmail: string;
+  userRole: UserRole;
+  action: string;
+  details: string;
+  ipAddress?: string;
+  timestamp: string;
+}
+
+export interface SchoolSettings {
+  schoolId: string;
+  smsProvider: 'hubtel' | 'arkesel' | 'twilio';
+  smsSenderId: string;
+  smsBalance: number;
+  momoMerchantNumber?: string;
+  gradingScale: Array<{
+    grade: string;
+    minScore: number;
+    maxScore: number;
+    remark: string;
+  }>;
+  receiptHeader: string;
+  receiptFooter: string;
+  reopeningDate: string;
+  vacationDate: string;
+}
+
+export interface PlatformCommunicationSettings {
+  sms: {
+    provider: 'hubtel' | 'arkesel' | 'twilio' | 'mnotify' | string;
+    apiKey: string;
+    apiSecret?: string;
+    senderId: string;
+    apiUrl: string;
+    isActive: boolean;
+  };
+  whatsapp: {
+    provider: 'meta' | 'twilio' | 'infobip' | string;
+    apiKey: string;
+    apiSecret?: string;
+    phoneNumberId?: string;
+    businessAccountId?: string;
+    apiUrl: string;
+    isActive: boolean;
+  };
+}
+

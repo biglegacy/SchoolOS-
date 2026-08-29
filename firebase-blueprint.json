@@ -1,0 +1,111 @@
+{
+  "entities": {
+    "School": {
+      "title": "School",
+      "description": "Educational institution registered on SchoolOS",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 200 },
+        "shortCode": { "type": "string", "maxLength": 30 },
+        "address": { "type": "string", "maxLength": 300 },
+        "district": { "type": "string", "maxLength": 100 },
+        "region": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["pending", "active", "suspended", "rejected"] },
+        "subscriptionPlan": { "type": "string", "enum": ["starter", "basic", "standard", "premium", "enterprise"] },
+        "planId": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "status", "ownerId"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Authenticated user profile in SchoolOS",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 120 },
+        "fullName": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["superAdmin", "schoolOwner", "principal", "teacher", "accountant", "parent", "student"] },
+        "schoolId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email", "role"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Enrolled student record within a school",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "schoolId": { "type": "string", "maxLength": 128 },
+        "admissionNumber": { "type": "string", "maxLength": 50 },
+        "firstName": { "type": "string", "maxLength": 80 },
+        "lastName": { "type": "string", "maxLength": 80 },
+        "gender": { "type": "string", "enum": ["male", "female"] },
+        "currentClassroomId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["active", "withdrawn", "graduated", "suspended"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "schoolId", "admissionNumber", "firstName", "lastName", "currentClassroomId"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Teacher/Staff member record in a school",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "schoolId": { "type": "string", "maxLength": 128 },
+        "staffId": { "type": "string", "maxLength": 50 },
+        "firstName": { "type": "string", "maxLength": 80 },
+        "lastName": { "type": "string", "maxLength": 80 },
+        "email": { "type": "string", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "role": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "on_leave", "terminated"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "schoolId", "staffId", "firstName", "lastName"]
+    },
+    "Classroom": {
+      "title": "Classroom",
+      "description": "Classroom grade and section in school",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "schoolId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "level": { "type": "string", "maxLength": 50 },
+        "academicYear": { "type": "string", "maxLength": 20 },
+        "term": { "type": "string", "maxLength": 20 }
+      },
+      "required": ["id", "schoolId", "name", "level"]
+    }
+  },
+  "firestore": {
+    "/schools/{schoolId}": {
+      "schema": { "$ref": "#/entities/School" },
+      "description": "Registered schools directory and metadata"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles with role and school isolation"
+    },
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Students registered across schools with schoolId partitioning"
+    },
+    "/teachers/{teacherId}": {
+      "schema": { "$ref": "#/entities/Teacher" },
+      "description": "Teachers registered across schools with schoolId partitioning"
+    },
+    "/classrooms/{classroomId}": {
+      "schema": { "$ref": "#/entities/Classroom" },
+      "description": "School classrooms and streams"
+    }
+  }
+}

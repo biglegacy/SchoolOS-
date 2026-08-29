@@ -1,0 +1,1340 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { 
+  School, 
+  Student, 
+  Teacher, 
+  Classroom, 
+  Subject, 
+  AttendanceRecord, 
+  AttendanceStatus, 
+  Examination, 
+  ExaminationResult, 
+  TerminalReport, 
+  FeeStructure, 
+  FeePayment, 
+  StudentFeeSummary, 
+  StoreItem, 
+  POSTransaction, 
+  BroadcastMessage, 
+  AuditLog, 
+  SchoolSettings, 
+  SubscriptionPlan,
+  SubscriptionTier,
+  FeatureKey,
+  UserProfile,
+  SMSBroadcastRecipient,
+  PlatformCommunicationSettings
+} from '../types';
+import { loadInitialDatabase, saveDatabase, DatabaseState, resetDatabaseToSeed } from '../lib/storageService';
+import { checkFeatureAccess, INITIAL_PLANS, INITIAL_PLATFORM_COMMUNICATION } from '../lib/mockData';
+import { useAuth } from './AuthContext';
+import { calculateGhanaGrade, calculatePositions, generateTeacherRemark, generateHeadTeacherRemark } from '../utils/calculations';
+import {
+  subscribeToFirestore,
+  fsUpdateSchool,
+  fsCreateUser,
+  fsUpdateUser,
+  fsDeleteUser,
+  fsAddStudent,
+  fsUpdateStudent,
+  fsDeleteStudent,
+  fsAddTeacher,
+  fsUpdateTeacher,
+  fsDeleteTeacher,
+  fsAddClassroom,
+  fsUpdateClassroom,
+  fsAddSubject,
+  fsMarkAttendanceBulk,
+  fsAddExamination,
+  fsSaveResults,
+  fsAddFeeStructure,
+  fsRecordFeePayment,
+  fsAddStoreItem,
+  fsUpdateStoreItem,
+  fsRecordPOSTransaction,
+  fsSendBroadcastMessage,
+  fsAddAuditLog,
+  fsCreatePlan,
+  fsUpdatePlan,
+  fsDeletePlan,
+  fsUpdatePlatformCommunication,
+  fsUpdateSchoolSettings
+} from '../lib/firestoreService';
+
+interface SchoolContextType {
+  // Current active school
+  school: School | null;
+  allSchools: School[];
+  plans: SubscriptionTier[];
+  
+  // Entities filtered by active school
+  students: Student[];
+  teachers: Teacher[];
+  classrooms: Classroom[];
+  subjects: Subject[];
+  attendance: AttendanceRecord[];
+  examinations: Examination[];
+  results: ExaminationResult[];
+  examResults: ExaminationResult[];
+  feeStructures: FeeStructure[];
+  feePayments: FeePayment[];
+  storeItems: StoreItem[];
+  posTransactions: POSTransaction[];
+  posSales: POSTransaction[];
+  messages: BroadcastMessage[];
+  auditLogs: AuditLog[];
+  settings: SchoolSettings;
+  schoolUsers: UserProfile[];
+  allUsers: UserProfile[];
+
+  // Feature Access Check
+  hasAccess: (feature: FeatureKey) => boolean;
+
+  // Student Actions
+  addStudent: (student: Omit<Student, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>) => Promise<Student>;
+  updateStudent: (id: string, data: Partial<Student>) => Promise<void>;
+  deleteStudent: (id: string) => Promise<void>;
+
+  // Teacher Actions
+  addTeacher: (teacher: Omit<Teacher, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>) => Promise<Teacher>;
+  updateTeacher: (id: string, data: Partial<Teacher>) => Promise<void>;
+  deleteTeacher: (id: string) => Promise<void>;
+
+  // Classroom Actions
+  addClassroom: (classroom: Omit<Classroom, 'id' | 'schoolId' | 'studentCount' | 'createdAt' | 'updatedAt'>) => Promise<Classroom>;
+  updateClassroom: (id: string, data: Partial<Classroom>) => Promise<void>;
+
+  // Subject Actions
+  addSubject: (subject: Omit<Subject, 'id' | 'schoolId' | 'createdAt'>) => Promise<Subject>;
+
+  // Attendance Actions
+  markAttendance: (records: Array<{ studentId: string; studentName: string; admissionNumber: string; status: AttendanceStatus; remarks?: string }>, classroomId: string, date: string) => Promise<void>;
+  markAttendanceBulk: (records: Array<{ studentId: string; studentName: string; classroomId: string; date: string; academicYear?: string; term?: string; status: AttendanceStatus; remarks?: string }>) => Promise<void>;
+  getAttendanceForDate: (classroomId: string, date: string) => AttendanceRecord[];
+
+  // Examination & Results Actions
+  addExamination: (exam: Omit<Examination, 'id' | 'schoolId' | 'createdAt'>) => Promise<Examination>;
+  saveResults: (results: Array<Omit<ExaminationResult, 'id' | 'schoolId' | 'createdAt' | 'updatedAt' | 'grade' | 'gradeRemark'>>) => Promise<void>;
+  recordExamResult: (result: any) => Promise<void>;
+  generateTerminalReport: (studentId: string, term: 'Term 1' | 'Term 2' | 'Term 3', academicYear: string) => TerminalReport | null;
+
+  // Promotion Workflow
+  promoteStudents: (promotions: Array<{ studentId: string; nextClassroomId?: string; action: 'promote' | 'repeat' | 'graduate' }>) => Promise<void>;
+  executePromotion: (options: { currentClassroomId: string; nextClassroomId: string; academicYear: string; promotedStudentIds: string[]; repeatedStudentIds: string[] }) => Promise<void>;
+
+  // Fee Management Actions
+  addFeeStructure: (structure: Omit<FeeStructure, 'id' | 'schoolId' | 'createdAt'>) => Promise<FeeStructure>;
+  recordFeePayment: (payment: Omit<FeePayment, 'id' | 'schoolId' | 'createdAt'>) => Promise<FeePayment>;
+  getStudentFeeSummaries: () => StudentFeeSummary[];
+
+  // Store & POS Actions
+  addStoreItem: (item: Omit<StoreItem, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>) => Promise<StoreItem>;
+  updateStoreItem: (id: string, data: Partial<StoreItem>) => Promise<void>;
+  updateStoreStock: (itemId: string, newStock: number, type?: string, reason?: string) => Promise<void>;
+  processPOSTransaction: (tx: Omit<POSTransaction, 'id' | 'schoolId' | 'receiptNumber' | 'createdAt'>) => Promise<POSTransaction>;
+  processPOSSale: (saleData: any) => Promise<POSTransaction>;
+
+  // Broadcast & Communications Actions
+  sendBroadcastMessage: (msg: Omit<BroadcastMessage, 'id' | 'schoolId' | 'costGHS' | 'status' | 'sentAt'>) => Promise<BroadcastMessage>;
+  sendSMSBroadcast: (recipientGroup: any, message: string, recipientCount?: number) => Promise<BroadcastMessage>;
+
+  // Super Admin Platform Actions
+  approveSchool: (schoolId: string) => Promise<void>;
+  rejectSchool: (schoolId: string) => Promise<void>;
+  suspendSchool: (schoolId: string) => Promise<void>;
+  updateAnySchool: (schoolId: string, data: Partial<School>) => Promise<void>;
+  updateSchoolSubscription: (schoolId: string, plan: SubscriptionPlan, expiryDate: string) => Promise<void>;
+  createPlan: (plan: Omit<SubscriptionTier, 'id' | 'createdAt' | 'updatedAt'>) => Promise<SubscriptionTier>;
+  updatePlan: (id: string, data: Partial<SubscriptionTier>) => Promise<void>;
+  deletePlan: (id: string) => Promise<void>;
+  setSchoolFeatureOverride: (schoolId: string, feature: FeatureKey, enabled: boolean | null) => Promise<void>;
+  assignSchoolPlan: (schoolId: string, planId: string, planCode: string, expiryDate?: string) => Promise<void>;
+
+  // User Accounts Management
+  createUserAccount: (userData: Omit<UserProfile, 'id' | 'uid' | 'createdAt'>, initialPassword?: string) => Promise<UserProfile>;
+  updateUserAccount: (id: string, data: Partial<UserProfile>) => Promise<void>;
+  deleteUserAccount: (id: string) => Promise<void>;
+
+  // Settings Actions
+  updateSettings: (newSettings: Partial<SchoolSettings>) => Promise<void>;
+  updateSchoolInfo: (data: Partial<School>) => Promise<void>;
+
+  // Super Admin Centralized Communication
+  platformCommunication: PlatformCommunicationSettings;
+  updatePlatformCommunication: (settings: Partial<PlatformCommunicationSettings>) => Promise<void>;
+
+  // Utilities
+  resetDemoData: () => void;
+}
+
+const SchoolContext = createContext<SchoolContextType | undefined>(undefined);
+
+export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentSchool, currentUser, syncStateFromStorage } = useAuth();
+  const [dbState, setDbState] = useState<DatabaseState>(() => loadInitialDatabase());
+
+  // Subscribe to Firestore for real-time live synchronization
+  useEffect(() => {
+    const unsubscribe = subscribeToFirestore((incoming) => {
+      setDbState(prev => {
+        const next = { ...prev, ...incoming };
+        saveDatabase(next);
+        return next;
+      });
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const updateStateAndPersist = (updater: (prev: DatabaseState) => DatabaseState) => {
+    setDbState(prev => {
+      const next = updater(prev);
+      saveDatabase(next);
+      setTimeout(() => syncStateFromStorage(), 0);
+      return next;
+    });
+  };
+
+  const activeSchoolId = currentSchool?.id || 'school_achimota_01';
+
+  const logAction = (action: string, details: string, targetSchoolId?: string): AuditLog => {
+    const newLog: AuditLog = {
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      schoolId: targetSchoolId || activeSchoolId,
+      schoolName: currentSchool?.name || 'SchoolOS Platform',
+      userId: currentUser?.id || 'system',
+      userEmail: currentUser?.email || 'admin@schoolos.online',
+      userRole: currentUser?.role || 'superAdmin',
+      action,
+      details,
+      timestamp: new Date().toISOString(),
+    };
+    // Sync audit log to Firestore
+    fsAddAuditLog(newLog).catch(err => console.warn('Audit log firestore sync warning:', err));
+    return newLog;
+  };
+
+  // Filtered entity sets for the active school (multi-tenancy)
+  const school = dbState.schools.find(s => s.id === activeSchoolId) || dbState.schools[0] || null;
+  const students = dbState.students.filter(s => s.schoolId === activeSchoolId);
+  const teachers = dbState.teachers.filter(t => t.schoolId === activeSchoolId);
+  const classrooms = dbState.classrooms.filter(c => c.schoolId === activeSchoolId);
+  const subjects = dbState.subjects.filter(sub => sub.schoolId === activeSchoolId || sub.schoolId === 'school_achimota_01');
+  const attendance = dbState.attendance.filter(a => a.schoolId === activeSchoolId);
+  const examinations = dbState.examinations.filter(e => e.schoolId === activeSchoolId);
+  const results = dbState.results.filter(r => r.schoolId === activeSchoolId);
+  const feeStructures = dbState.feeStructures.filter(f => f.schoolId === activeSchoolId);
+  const feePayments = dbState.feePayments.filter(p => p.schoolId === activeSchoolId);
+  const storeItems = dbState.storeItems.filter(i => i.schoolId === activeSchoolId);
+  const posTransactions = dbState.posTransactions.filter(p => p.schoolId === activeSchoolId);
+  const messages = dbState.messages.filter(m => m.schoolId === activeSchoolId);
+  const auditLogs = currentUser?.role === 'superAdmin' 
+    ? dbState.auditLogs 
+    : dbState.auditLogs.filter(l => l.schoolId === activeSchoolId);
+
+  const defaultSettings: SchoolSettings = {
+    schoolId: activeSchoolId,
+    smsProvider: 'hubtel',
+    smsSenderId: school?.shortCode || 'SCHOOLOS',
+    smsBalance: 850,
+    gradingScale: [
+      { grade: 'A', minScore: 80, maxScore: 100, remark: 'Exemplary' },
+      { grade: 'B+', minScore: 75, maxScore: 79, remark: 'Very Good' },
+      { grade: 'B', minScore: 70, maxScore: 74, remark: 'Good' },
+      { grade: 'C', minScore: 60, maxScore: 69, remark: 'Credit' },
+      { grade: 'D', minScore: 50, maxScore: 59, remark: 'Pass' },
+      { grade: 'E', minScore: 45, maxScore: 49, remark: 'Weak Pass' },
+      { grade: 'F', minScore: 0, maxScore: 44, remark: 'Fail' }
+    ],
+    receiptHeader: `${school?.name || 'SchoolOS Academy'}\nP.O. Box ${school?.district || 'Accra'}, Ghana\nTel: ${school?.phone || '+233 24 000 0000'}`,
+    receiptFooter: 'Thank you for choosing excellence in education.\nReceipt valid upon official stamp.',
+    reopeningDate: '2026-09-08',
+    vacationDate: '2026-08-29',
+  };
+
+  const settings = dbState.settings[activeSchoolId] || defaultSettings;
+
+  // Student CRUD
+  const addStudent = async (studentData: Omit<Student, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>): Promise<Student> => {
+    const newId = `student_${Date.now()}`;
+    const newStudent: Student = {
+      ...studentData,
+      id: newId,
+      schoolId: activeSchoolId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    updateStateAndPersist(prev => {
+      const log = logAction('ENROLL_STUDENT', `Enrolled new student ${newStudent.firstName} ${newStudent.lastName} (${newStudent.admissionNumber}) into ${newStudent.classroomName}`);
+      return {
+        ...prev,
+        students: [newStudent, ...prev.students],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsAddStudent(newStudent);
+    return newStudent;
+  };
+
+  const updateStudent = async (id: string, data: Partial<Student>) => {
+    updateStateAndPersist(prev => {
+      const updatedStudents = prev.students.map(s => s.id === id ? { ...s, ...data, updatedAt: new Date().toISOString() } : s);
+      const target = prev.students.find(s => s.id === id);
+      const log = logAction('UPDATE_STUDENT', `Updated profile of student ${target?.firstName || ''} ${target?.lastName || id}`);
+      return {
+        ...prev,
+        students: updatedStudents,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateStudent(id, data);
+  };
+
+  const deleteStudent = async (id: string) => {
+    updateStateAndPersist(prev => {
+      const target = prev.students.find(s => s.id === id);
+      const log = logAction('WITHDRAW_STUDENT', `Withdrew student record ${target?.firstName} ${target?.lastName} (${target?.admissionNumber})`);
+      return {
+        ...prev,
+        students: prev.students.filter(s => s.id !== id),
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsDeleteStudent(id);
+  };
+
+  // Teacher CRUD
+  const addTeacher = async (teacherData: Omit<Teacher, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>): Promise<Teacher> => {
+    const newId = `teacher_${Date.now()}`;
+    const newTeacher: Teacher = {
+      ...teacherData,
+      id: newId,
+      schoolId: activeSchoolId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    updateStateAndPersist(prev => {
+      const log = logAction('ADD_STAFF', `Added teacher ${newTeacher.firstName} ${newTeacher.lastName} (Staff ID: ${newTeacher.staffId})`);
+      return {
+        ...prev,
+        teachers: [newTeacher, ...prev.teachers],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsAddTeacher(newTeacher);
+    return newTeacher;
+  };
+
+  const updateTeacher = async (id: string, data: Partial<Teacher>) => {
+    updateStateAndPersist(prev => {
+      const updatedTeachers = prev.teachers.map(t => t.id === id ? { ...t, ...data, updatedAt: new Date().toISOString() } : t);
+      const target = prev.teachers.find(t => t.id === id);
+      const log = logAction('UPDATE_STAFF', `Updated staff record for ${target?.firstName} ${target?.lastName}`);
+      return {
+        ...prev,
+        teachers: updatedTeachers,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateTeacher(id, data);
+  };
+
+  const deleteTeacher = async (id: string) => {
+    updateStateAndPersist(prev => {
+      const target = prev.teachers.find(t => t.id === id);
+      const log = logAction('DEACTIVATE_STAFF', `Deactivated teacher ${target?.firstName} ${target?.lastName}`);
+      return {
+        ...prev,
+        teachers: prev.teachers.filter(t => t.id !== id),
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsDeleteTeacher(id);
+  };
+
+  // Classroom CRUD
+  const addClassroom = async (classroomData: Omit<Classroom, 'id' | 'schoolId' | 'studentCount' | 'createdAt' | 'updatedAt'>): Promise<Classroom> => {
+    const newId = `class_${Date.now()}`;
+    const newClassroom: Classroom = {
+      ...classroomData,
+      id: newId,
+      schoolId: activeSchoolId,
+      studentCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    updateStateAndPersist(prev => {
+      const log = logAction('CREATE_CLASSROOM', `Created classroom stream ${newClassroom.name} (${newClassroom.level})`);
+      return {
+        ...prev,
+        classrooms: [...prev.classrooms, newClassroom],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsAddClassroom(newClassroom);
+    return newClassroom;
+  };
+
+  const updateClassroom = async (id: string, data: Partial<Classroom>) => {
+    updateStateAndPersist(prev => {
+      const updated = prev.classrooms.map(c => c.id === id ? { ...c, ...data, updatedAt: new Date().toISOString() } : c);
+      const target = prev.classrooms.find(c => c.id === id);
+      const log = logAction('UPDATE_CLASSROOM', `Updated classroom ${target?.name}`);
+      return {
+        ...prev,
+        classrooms: updated,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateClassroom(id, data);
+  };
+
+  // Subject CRUD
+  const addSubject = async (subjectData: Omit<Subject, 'id' | 'schoolId' | 'createdAt'>): Promise<Subject> => {
+    const newId = `sub_${Date.now()}`;
+    const newSubject: Subject = {
+      ...subjectData,
+      id: newId,
+      schoolId: activeSchoolId,
+      createdAt: new Date().toISOString(),
+    };
+
+    updateStateAndPersist(prev => {
+      const log = logAction('ADD_SUBJECT', `Added curriculum subject ${newSubject.name} (${newSubject.code})`);
+      return {
+        ...prev,
+        subjects: [...prev.subjects, newSubject],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsAddSubject(newSubject);
+    return newSubject;
+  };
+
+  // Attendance
+  const markAttendance = async (
+    records: Array<{ studentId: string; studentName: string; admissionNumber: string; status: AttendanceStatus; remarks?: string }>, 
+    classroomId: string, 
+    date: string
+  ) => {
+    const newRecords: AttendanceRecord[] = records.map(r => ({
+      id: `att_${classroomId}_${r.studentId}_${date}`,
+      schoolId: activeSchoolId,
+      classroomId,
+      studentId: r.studentId,
+      studentName: r.studentName,
+      admissionNumber: r.admissionNumber,
+      date,
+      status: r.status,
+      remarks: r.remarks,
+      term: school?.currentTerm || 'Term 2',
+      academicYear: school?.currentAcademicYear || '2025/2026',
+      recordedBy: currentUser?.fullName || 'Class Teacher',
+      createdAt: new Date().toISOString(),
+    }));
+
+    updateStateAndPersist(prev => {
+      const filtered = prev.attendance.filter(a => !(a.classroomId === classroomId && a.date === date));
+      const classroom = prev.classrooms.find(c => c.id === classroomId);
+      const presentCount = records.filter(r => r.status === 'present').length;
+      const log = logAction('MARK_ATTENDANCE', `Recorded daily roll call for ${classroom?.name || 'Classroom'} on ${date}: ${presentCount}/${records.length} present.`);
+      
+      return {
+        ...prev,
+        attendance: [...newRecords, ...filtered],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsMarkAttendanceBulk(newRecords);
+  };
+
+  const getAttendanceForDate = (classroomId: string, date: string): AttendanceRecord[] => {
+    return attendance.filter(a => a.classroomId === classroomId && a.date === date);
+  };
+
+  // Examinations & Results
+  const addExamination = async (examData: Omit<Examination, 'id' | 'schoolId' | 'createdAt'>): Promise<Examination> => {
+    const newId = `exam_${Date.now()}`;
+    const newExam: Examination = {
+      ...examData,
+      id: newId,
+      schoolId: activeSchoolId,
+      createdAt: new Date().toISOString(),
+    };
+
+    updateStateAndPersist(prev => {
+      const log = logAction('CREATE_EXAMINATION', `Scheduled examination session: ${newExam.name}`);
+      return {
+        ...prev,
+        examinations: [newExam, ...prev.examinations],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsAddExamination(newExam);
+    return newExam;
+  };
+
+  const saveResults = async (resultsToSave: Array<Omit<ExaminationResult, 'id' | 'schoolId' | 'createdAt' | 'updatedAt' | 'grade' | 'gradeRemark'>>) => {
+    const processed: ExaminationResult[] = resultsToSave.map(r => {
+      const total = Math.min(100, Math.max(0, Math.round(r.classScore + r.examScore)));
+      const gradeInfo = calculateGhanaGrade(total);
+      return {
+        ...r,
+        id: `res_${r.examinationId}_${r.studentId}_${r.subjectId}`,
+        schoolId: activeSchoolId,
+        totalScore: total,
+        grade: gradeInfo.grade,
+        gradeRemark: gradeInfo.remark,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    const withPositions = calculatePositions(processed);
+
+    updateStateAndPersist(prev => {
+      const existingFiltered = prev.results.filter(existing => 
+        !withPositions.some(p => p.examinationId === existing.examinationId && p.studentId === existing.studentId && p.subjectId === existing.subjectId)
+      );
+      const log = logAction('ENTER_EXAM_SCORES', `Submitted Continuous Assessment & Exam marks for ${withPositions.length} student result entries.`);
+
+      return {
+        ...prev,
+        results: [...withPositions, ...existingFiltered],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsSaveResults(withPositions);
+  };
+
+  const generateTerminalReport = (studentId: string, term: 'Term 1' | 'Term 2' | 'Term 3', academicYear: string): TerminalReport | null => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return null;
+
+    const studentResults = results.filter(r => r.studentId === studentId && r.term === term && r.academicYear === academicYear);
+    
+    // Attendance stats
+    const studentAttendance = attendance.filter(a => a.studentId === studentId && a.term === term && a.academicYear === academicYear);
+    const totalDays = Math.max(studentAttendance.length, 65);
+    const daysPresent = studentAttendance.filter(a => a.status === 'present' || a.status === 'late').length || 62;
+    const daysAbsent = totalDays - daysPresent;
+    const percentageAttendance = Math.round((daysPresent / totalDays) * 100);
+
+    const subjectBreakdown = studentResults.map(res => ({
+      subjectName: res.subjectName,
+      classScore: res.classScore,
+      examScore: res.examScore,
+      total: res.totalScore,
+      grade: res.grade,
+      position: res.position || 1,
+      remarks: res.teacherRemarks || res.gradeRemark
+    }));
+
+    const totalScores = (studentResults || []).reduce((acc, curr) => acc + (curr?.totalScore || 0), 0);
+    const overallAverage = studentResults.length > 0 ? Math.round(totalScores / studentResults.length) : 78;
+    const overallGradeInfo = calculateGhanaGrade(overallAverage);
+
+    const classStudents = students.filter(s => s.currentClassroomId === student.currentClassroomId);
+    const totalStudentsInClass = Math.max(classStudents.length, 28);
+    const overallPosition = studentResults[0]?.position || 2;
+
+    const promoted = overallAverage >= 50;
+    const nextLevel = student.level.includes('Primary 4') ? 'Primary 5 (Basic 5)' : 'Next Level';
+
+    return {
+      id: `report_${studentId}_${term}_${academicYear}`,
+      schoolId: activeSchoolId,
+      studentId: student.id,
+      studentName: `${student.firstName} ${student.lastName} ${student.otherNames || ''}`.trim(),
+      admissionNumber: student.admissionNumber,
+      classroomId: student.currentClassroomId,
+      classroomName: student.classroomName,
+      academicYear,
+      term,
+      subjects: subjectBreakdown,
+      attendanceSummary: {
+        totalDays,
+        daysPresent,
+        daysAbsent,
+        percentageAttendance,
+      },
+      overallAverage,
+      overallGrade: overallGradeInfo.grade,
+      overallPosition,
+      totalStudentsInClass,
+      classTeacherRemarks: generateTeacherRemark(overallAverage),
+      headTeacherRemarks: generateHeadTeacherRemark(overallAverage, promoted, nextLevel),
+      promoted,
+      nextClass: nextLevel,
+      reopeningDate: settings.reopeningDate,
+      dateIssued: new Date().toISOString().split('T')[0],
+    };
+  };
+
+  // Promotion Workflow
+  const promoteStudents = async (promotions: Array<{ studentId: string; nextClassroomId?: string; action: 'promote' | 'repeat' | 'graduate' }>) => {
+    updateStateAndPersist(prev => {
+      const updatedStudents = prev.students.map(std => {
+        const promo = promotions.find(p => p.studentId === std.id);
+        if (!promo) return std;
+
+        if (promo.action === 'graduate') {
+          return { ...std, status: 'graduated' as const, updatedAt: new Date().toISOString() };
+        }
+
+        if (promo.action === 'promote' && promo.nextClassroomId) {
+          const nextClass = prev.classrooms.find(c => c.id === promo.nextClassroomId);
+          return {
+            ...std,
+            currentClassroomId: promo.nextClassroomId,
+            classroomName: nextClass?.name || std.classroomName,
+            level: nextClass?.level || std.level,
+            updatedAt: new Date().toISOString()
+          };
+        }
+
+        return std;
+      });
+
+      const log = logAction('EXECUTE_PROMOTION', `Processed batch promotion workflow for ${promotions.length} students.`);
+      return {
+        ...prev,
+        students: updatedStudents,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    for (const p of promotions) {
+      if (p.action === 'graduate') {
+        await fsUpdateStudent(p.studentId, { status: 'graduated' });
+      } else if (p.action === 'promote' && p.nextClassroomId) {
+        const nextClass = classrooms.find(c => c.id === p.nextClassroomId);
+        await fsUpdateStudent(p.studentId, {
+          currentClassroomId: p.nextClassroomId,
+          classroomName: nextClass?.name,
+          level: nextClass?.level
+        });
+      }
+    }
+  };
+
+  // Fees & Payments
+  const addFeeStructure = async (structureData: Omit<FeeStructure, 'id' | 'schoolId' | 'createdAt'>): Promise<FeeStructure> => {
+    const newId = `fee_struct_${Date.now()}`;
+    const newStructure: FeeStructure = {
+      ...structureData,
+      id: newId,
+      schoolId: activeSchoolId,
+      createdAt: new Date().toISOString(),
+    };
+
+    updateStateAndPersist(prev => {
+      const log = logAction('CREATE_FEE_STRUCTURE', `Created fee bill structure: ${newStructure.name} (${newStructure.totalAmount} GHS)`);
+      return {
+        ...prev,
+        feeStructures: [newStructure, ...prev.feeStructures],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsAddFeeStructure(newStructure);
+    return newStructure;
+  };
+
+  const recordFeePayment = async (paymentData: Omit<FeePayment, 'id' | 'schoolId' | 'createdAt'>): Promise<FeePayment> => {
+    const newId = `pay_${Date.now()}`;
+    const newPayment: FeePayment = {
+      ...paymentData,
+      id: newId,
+      schoolId: activeSchoolId,
+      createdAt: new Date().toISOString(),
+    };
+
+    updateStateAndPersist(prev => {
+      const mode = (newPayment.paymentMethod || newPayment.method || 'momo').toUpperCase();
+      const log = logAction('RECORD_PAYMENT', `Received GH₵ ${newPayment.amount} via ${mode} from ${newPayment.payerName} for student ${newPayment.studentName} (${newPayment.admissionNumber || ''}). Ref: ${newPayment.transactionReference || newPayment.reference || ''}`);
+      return {
+        ...prev,
+        feePayments: [newPayment, ...prev.feePayments],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsRecordFeePayment(newPayment);
+    return newPayment;
+  };
+
+  const getStudentFeeSummaries = (): StudentFeeSummary[] => {
+    return students.map(student => {
+      const applicableFee = feeStructures.find(f => f.classroomId === student.currentClassroomId) || feeStructures[0];
+      const totalBilled = applicableFee ? applicableFee.totalAmount : 2900;
+      
+      const payments = (feePayments || []).filter(p => p.studentId === student.id);
+      const totalPaid = (payments || []).reduce((acc, curr) => acc + (curr?.amount || 0), 0);
+      const balance = totalBilled - totalPaid;
+
+      let status: 'paid' | 'partial' | 'unpaid' | 'overpaid' = 'unpaid';
+      if (balance <= 0 && totalPaid > 0) status = balance < 0 ? 'overpaid' : 'paid';
+      else if (totalPaid > 0 && balance > 0) status = 'partial';
+
+      return {
+        studentId: student.id,
+        studentName: `${student.firstName} ${student.lastName}`,
+        admissionNumber: student.admissionNumber,
+        classroomName: student.classroomName,
+        totalBilled,
+        totalPaid,
+        balance,
+        status,
+        lastPaymentDate: payments[0]?.date,
+      };
+    });
+  };
+
+  // Store & POS
+  const addStoreItem = async (itemData: Omit<StoreItem, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>): Promise<StoreItem> => {
+    const newId = `item_${Date.now()}`;
+    const newItem: StoreItem = {
+      ...itemData,
+      id: newId,
+      schoolId: activeSchoolId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    updateStateAndPersist(prev => {
+      const log = logAction('ADD_STORE_ITEM', `Added store inventory product: ${newItem.name} (SKU: ${newItem.sku})`);
+      return {
+        ...prev,
+        storeItems: [newItem, ...prev.storeItems],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsAddStoreItem(newItem);
+    return newItem;
+  };
+
+  const updateStoreItem = async (id: string, data: Partial<StoreItem>) => {
+    updateStateAndPersist(prev => {
+      const updated = prev.storeItems.map(item => item.id === id ? { ...item, ...data, updatedAt: new Date().toISOString() } : item);
+      const target = prev.storeItems.find(i => i.id === id);
+      const log = logAction('UPDATE_STORE_ITEM', `Updated inventory/stock for ${target?.name}`);
+      return {
+        ...prev,
+        storeItems: updated,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateStoreItem(id, data);
+  };
+
+  const processPOSTransaction = async (txData: Omit<POSTransaction, 'id' | 'schoolId' | 'receiptNumber' | 'createdAt'>): Promise<POSTransaction> => {
+    const txId = `pos_tx_${Date.now()}`;
+    const receiptNumber = `POS-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const newTx: POSTransaction = {
+      ...txData,
+      id: txId,
+      schoolId: activeSchoolId,
+      receiptNumber,
+      createdAt: new Date().toISOString(),
+    };
+
+    updateStateAndPersist(prev => {
+      const updatedStore = prev.storeItems.map(item => {
+        const sold = txData.items.find(i => i.itemId === item.id);
+        if (sold) {
+          const nextStock = Math.max(0, item.currentStock - sold.quantity);
+          return { ...item, currentStock: nextStock, updatedAt: new Date().toISOString() };
+        }
+        return item;
+      });
+
+      const log = logAction('POS_CHECKOUT', `Processed POS sale ${receiptNumber} for GH₵ ${newTx.total} (${newTx.paymentMethod.toUpperCase()}) by ${newTx.cashierName}`);
+
+      return {
+        ...prev,
+        storeItems: updatedStore,
+        posTransactions: [newTx, ...prev.posTransactions],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsRecordPOSTransaction(newTx);
+    return newTx;
+  };
+
+  // Broadcast & SMS
+  const sendBroadcastMessage = async (msgData: Omit<BroadcastMessage, 'id' | 'schoolId' | 'costGHS' | 'status' | 'sentAt'>): Promise<BroadcastMessage> => {
+    const newId = `msg_${Date.now()}`;
+    const costPerSms = 0.10;
+    const totalCost = Number((msgData.recipientCount * costPerSms).toFixed(2));
+
+    const newMsg: BroadcastMessage = {
+      ...msgData,
+      id: newId,
+      schoolId: activeSchoolId,
+      costGHS: totalCost,
+      status: 'delivered',
+      sentAt: new Date().toISOString(),
+    };
+
+    updateStateAndPersist(prev => {
+      const currentSetting = prev.settings[activeSchoolId] || defaultSettings;
+      const updatedSettings = {
+        ...prev.settings,
+        [activeSchoolId]: {
+          ...currentSetting,
+          smsBalance: Math.max(0, currentSetting.smsBalance - msgData.recipientCount)
+        }
+      };
+
+      const log = logAction('SEND_SMS_BROADCAST', `Sent broadcast to ${newMsg.recipientGroup} (${newMsg.recipientCount} recipients) via ${newMsg.senderId}. Cost: GH₵ ${totalCost}`);
+
+      return {
+        ...prev,
+        messages: [newMsg, ...prev.messages],
+        settings: updatedSettings,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsSendBroadcastMessage(newMsg);
+    return newMsg;
+  };
+
+  // Super Admin Platform Operations
+  const approveSchool = async (schoolId: string) => {
+    updateStateAndPersist(prev => {
+      const updatedSchools = prev.schools.map(s => s.id === schoolId ? { ...s, status: 'active' as const, updatedAt: new Date().toISOString() } : s);
+      const target = prev.schools.find(s => s.id === schoolId);
+      const log = logAction('APPROVE_SCHOOL_REGISTRATION', `Approved registration for ${target?.name}. Full access activated.`, schoolId);
+
+      return {
+        ...prev,
+        schools: updatedSchools,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateSchool(schoolId, { status: 'active' });
+  };
+
+  const rejectSchool = async (schoolId: string) => {
+    updateStateAndPersist(prev => {
+      const updatedSchools = prev.schools.map(s => s.id === schoolId ? { ...s, status: 'rejected' as const, updatedAt: new Date().toISOString() } : s);
+      const target = prev.schools.find(s => s.id === schoolId);
+      const log = logAction('REJECT_SCHOOL_REGISTRATION', `Rejected registration for ${target?.name}.`, schoolId);
+
+      return {
+        ...prev,
+        schools: updatedSchools,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateSchool(schoolId, { status: 'rejected' });
+  };
+
+  const suspendSchool = async (schoolId: string) => {
+    updateStateAndPersist(prev => {
+      const updatedSchools = prev.schools.map(s => s.id === schoolId ? { ...s, status: 'suspended' as const, updatedAt: new Date().toISOString() } : s);
+      const target = prev.schools.find(s => s.id === schoolId);
+      const log = logAction('SUSPEND_SCHOOL_ACCESS', `Suspended platform access for ${target?.name}.`, schoolId);
+
+      return {
+        ...prev,
+        schools: updatedSchools,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateSchool(schoolId, { status: 'suspended' });
+  };
+
+  const updateAnySchool = async (schoolId: string, data: Partial<School>) => {
+    updateStateAndPersist(prev => {
+      const updatedSchools = prev.schools.map(s => s.id === schoolId ? { ...s, ...data, updatedAt: new Date().toISOString() } : s);
+      const target = prev.schools.find(s => s.id === schoolId);
+      const log = logAction('UPDATE_SCHOOL_DETAILS', `Updated institutional records for ${target?.name || schoolId}`, schoolId);
+
+      return {
+        ...prev,
+        schools: updatedSchools,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateSchool(schoolId, data);
+  };
+
+  const updateSchoolSubscription = async (schoolId: string, plan: SubscriptionPlan, expiryDate: string) => {
+    updateStateAndPersist(prev => {
+      const updatedSchools = prev.schools.map(s => s.id === schoolId ? { ...s, subscriptionPlan: plan, subscriptionExpiry: expiryDate, updatedAt: new Date().toISOString() } : s);
+      const target = prev.schools.find(s => s.id === schoolId);
+      const log = logAction('UPDATE_SUBSCRIPTION_PLAN', `Updated subscription for ${target?.name} to ${plan.toUpperCase()} tier (Expires: ${expiryDate})`, schoolId);
+
+      return {
+        ...prev,
+        schools: updatedSchools,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateSchool(schoolId, { subscriptionPlan: plan, subscriptionExpiry: expiryDate });
+  };
+
+  // Settings
+  const updateSettings = async (newSettingsData: Partial<SchoolSettings>) => {
+    updateStateAndPersist(prev => {
+      const updated = {
+        ...prev.settings,
+        [activeSchoolId]: {
+          ...(prev.settings[activeSchoolId] || defaultSettings),
+          ...newSettingsData
+        }
+      };
+      const log = logAction('UPDATE_SCHOOL_SETTINGS', 'Updated institutional configuration and communication parameters.');
+      return {
+        ...prev,
+        settings: updated,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateSchoolSettings(activeSchoolId, newSettingsData);
+  };
+
+  const updateSchoolInfo = async (data: Partial<School>) => {
+    updateStateAndPersist(prev => {
+      const updatedSchools = prev.schools.map(s => s.id === activeSchoolId ? { ...s, ...data, updatedAt: new Date().toISOString() } : s);
+      const log = logAction('UPDATE_INSTITUTION_PROFILE', `Updated institutional profile details for ${school?.name}`);
+      return {
+        ...prev,
+        schools: updatedSchools,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateSchool(activeSchoolId, data);
+  };
+
+  const updatePlatformCommunication = async (settingsData: Partial<PlatformCommunicationSettings>) => {
+    updateStateAndPersist(prev => {
+      const current = prev.platformCommunication || INITIAL_PLATFORM_COMMUNICATION;
+      const updated: PlatformCommunicationSettings = {
+        sms: {
+          ...current.sms,
+          ...(settingsData.sms || {})
+        },
+        whatsapp: {
+          ...current.whatsapp,
+          ...(settingsData.whatsapp || {})
+        }
+      };
+      const log = logAction('UPDATE_PLATFORM_COMMUNICATION', 'Updated platform centralized SMS/WhatsApp gateway configurations');
+      return {
+        ...prev,
+        platformCommunication: updated,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdatePlatformCommunication(settingsData);
+  };
+
+  // Plan Management Actions (Super Admin)
+  const createPlan = async (planData: Omit<SubscriptionTier, 'id' | 'createdAt' | 'updatedAt'>): Promise<SubscriptionTier> => {
+    const newId = `plan_${Date.now()}`;
+    const newPlan: SubscriptionTier = {
+      ...planData,
+      id: newId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    updateStateAndPersist(prev => {
+      const log = logAction('CREATE_SUBSCRIPTION_PLAN', `Created new SaaS tier: ${newPlan.name} (₵${newPlan.priceGHS}/${newPlan.billingPeriod})`);
+      return {
+        ...prev,
+        plans: [...(prev.plans || INITIAL_PLANS), newPlan],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+    await fsCreatePlan(newPlan);
+    return newPlan;
+  };
+
+  const updatePlan = async (id: string, data: Partial<SubscriptionTier>) => {
+    updateStateAndPersist(prev => {
+      const plansList = prev.plans || INITIAL_PLANS;
+      const updated = plansList.map(p => p.id === id ? { ...p, ...data, updatedAt: new Date().toISOString() } : p);
+      const target = plansList.find(p => p.id === id);
+      const log = logAction('UPDATE_SUBSCRIPTION_PLAN', `Updated SaaS tier configurations for ${target?.name || id}`);
+      return {
+        ...prev,
+        plans: updated,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+    await fsUpdatePlan(id, data);
+  };
+
+  const deletePlan = async (id: string) => {
+    updateStateAndPersist(prev => {
+      const plansList = prev.plans || INITIAL_PLANS;
+      const target = plansList.find(p => p.id === id);
+      const filtered = plansList.filter(p => p.id !== id);
+      const log = logAction('DELETE_SUBSCRIPTION_PLAN', `Deleted subscription tier: ${target?.name || id}`);
+      return {
+        ...prev,
+        plans: filtered,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+    await fsDeletePlan(id);
+  };
+
+  const setSchoolFeatureOverride = async (targetSchoolId: string, feature: FeatureKey, enabled: boolean | null) => {
+    const target = dbState.schools.find(s => s.id === targetSchoolId);
+    const currentOverrides = { ...(target?.featureOverrides || {}) };
+    if (enabled === null) {
+      delete currentOverrides[feature];
+    } else {
+      currentOverrides[feature] = enabled;
+    }
+
+    updateStateAndPersist(prev => {
+      const updatedSchools = prev.schools.map(s => {
+        if (s.id !== targetSchoolId) return s;
+        return {
+          ...s,
+          featureOverrides: currentOverrides,
+          updatedAt: new Date().toISOString()
+        };
+      });
+      const log = logAction('FEATURE_OVERRIDE', `Set override for feature "${feature}" to ${enabled === null ? 'DEFAULT' : enabled ? 'ENABLED' : 'DISABLED'} for ${target?.name || targetSchoolId}`, targetSchoolId);
+      return {
+        ...prev,
+        schools: updatedSchools,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateSchool(targetSchoolId, { featureOverrides: currentOverrides });
+  };
+
+  const assignSchoolPlan = async (targetSchoolId: string, planId: string, planCode: string, expiryDate?: string) => {
+    const defaultExpiry = expiryDate || new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    updateStateAndPersist(prev => {
+      const updatedSchools = prev.schools.map(s => {
+        if (s.id !== targetSchoolId) return s;
+        return {
+          ...s,
+          planId,
+          subscriptionPlan: planCode as SubscriptionPlan,
+          subscriptionExpiry: defaultExpiry,
+          updatedAt: new Date().toISOString()
+        };
+      });
+      const target = prev.schools.find(s => s.id === targetSchoolId);
+      const log = logAction('ASSIGN_SCHOOL_PLAN', `Assigned plan ${planCode.toUpperCase()} to ${target?.name || targetSchoolId}`, targetSchoolId);
+      return {
+        ...prev,
+        schools: updatedSchools,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateSchool(targetSchoolId, { 
+      planId, 
+      subscriptionPlan: planCode as SubscriptionPlan, 
+      subscriptionExpiry: defaultExpiry 
+    });
+  };
+
+  // User Accounts Management
+  const createUserAccount = async (userData: Omit<UserProfile, 'id' | 'uid' | 'createdAt'>, initialPassword?: string): Promise<UserProfile> => {
+    const newId = `user_${Date.now()}`;
+    const newUser: UserProfile = {
+      ...userData,
+      id: newId,
+      uid: `auth_${newId}`,
+      password: initialPassword || userData.password || 'password123',
+      createdAt: new Date().toISOString(),
+    };
+    updateStateAndPersist(prev => {
+      const log = logAction('CREATE_USER_PORTAL_ACCOUNT', `Created portal account for ${newUser.fullName} (${newUser.role}) at ${school?.name || activeSchoolId}`);
+      return {
+        ...prev,
+        users: [newUser, ...prev.users],
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsCreateUser(newUser);
+    return newUser;
+  };
+
+  const updateUserAccount = async (id: string, data: Partial<UserProfile>) => {
+    updateStateAndPersist(prev => {
+      const updatedUsers = prev.users.map(u => u.id === id ? { ...u, ...data } : u);
+      const log = logAction('UPDATE_USER_PORTAL_ACCOUNT', `Updated profile credentials for user account ${id}`);
+      return {
+        ...prev,
+        users: updatedUsers,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsUpdateUser(id, data);
+  };
+
+  const deleteUserAccount = async (id: string) => {
+    updateStateAndPersist(prev => {
+      const target = prev.users.find(u => u.id === id);
+      const updatedUsers = prev.users.filter(u => u.id !== id);
+      const log = logAction('DELETE_USER_PORTAL_ACCOUNT', `Revoked portal access for ${target?.fullName || id}`);
+      return {
+        ...prev,
+        users: updatedUsers,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    await fsDeleteUser(id);
+  };
+
+  const plans = dbState.plans || INITIAL_PLANS;
+  const schoolUsers = dbState.users.filter(u => u.schoolId === activeSchoolId);
+  const allUsersList = dbState.users;
+
+  // Convenience aliases and adapters
+  const markAttendanceBulk = async (records: Array<{ studentId: string; studentName: string; classroomId: string; date: string; academicYear?: string; term?: string; status: AttendanceStatus; remarks?: string }>) => {
+    if (records.length === 0) return;
+    const classroomId = records[0].classroomId;
+    const date = records[0].date;
+    const formatted = records.map(r => {
+      const student = students.find(s => s.id === r.studentId);
+      return {
+        studentId: r.studentId,
+        studentName: r.studentName,
+        admissionNumber: student?.admissionNumber || '',
+        status: r.status,
+        remarks: r.remarks,
+      };
+    });
+    await markAttendance(formatted, classroomId, date);
+  };
+
+  const recordExamResult = async (resultData: any) => {
+    const student = students.find(s => s.id === resultData.studentId);
+    await saveResults([{
+      examinationId: resultData.examinationId || 'exam_terminal_2026_t3',
+      studentId: resultData.studentId,
+      studentName: resultData.studentName || `${student?.firstName || ''} ${student?.lastName || ''}`.trim(),
+      admissionNumber: student?.admissionNumber || resultData.admissionNumber || 'STU-001',
+      classroomId: resultData.classroomId,
+      classroomName: resultData.classroomName || 'Classroom',
+      subjectId: resultData.subjectId || `sub_${resultData.subject?.toLowerCase().replace(/\s+/g, '_') || 'gen'}`,
+      subjectName: resultData.subjectName || resultData.subject,
+      academicYear: resultData.academicYear || school?.currentAcademicYear || '2025/2026',
+      term: resultData.term || school?.currentTerm || 'Term 2',
+      classScore: Number(resultData.classScore) || 0,
+      examScore: Number(resultData.examScore) || 0,
+      totalScore: Number(resultData.totalScore) || 0,
+      position: resultData.position || 1,
+      teacherRemarks: resultData.remarks || '',
+    }]);
+  };
+
+  const executePromotion = async (options: { currentClassroomId: string; nextClassroomId: string; academicYear: string; promotedStudentIds: string[]; repeatedStudentIds: string[] }) => {
+    const list: Array<{ studentId: string; nextClassroomId?: string; action: 'promote' | 'repeat' | 'graduate' }> = [
+      ...options.promotedStudentIds.map(id => ({ studentId: id, nextClassroomId: options.nextClassroomId, action: 'promote' as const })),
+      ...options.repeatedStudentIds.map(id => ({ studentId: id, nextClassroomId: options.currentClassroomId, action: 'repeat' as const })),
+    ];
+    await promoteStudents(list);
+  };
+
+  const updateStoreStock = async (itemId: string, newStock: number, _type?: string, _reason?: string) => {
+    await updateStoreItem(itemId, { currentStock: newStock });
+  };
+
+  const processPOSSale = async (saleData: any): Promise<POSTransaction> => {
+    const formattedItems = (saleData.items || []).map((c: any) => {
+      const uPrice = c.unitPrice || c.item?.sellingPrice || c.price || 0;
+      const q = c.quantity || 1;
+      return {
+        itemId: c.itemId || c.item?.id || `item_${Date.now()}`,
+        name: c.itemName || c.item?.name || c.name || 'Store Item',
+        quantity: q,
+        unitPrice: uPrice,
+        subtotal: uPrice * q,
+      };
+    });
+
+    const sub = formattedItems.reduce((acc: number, item: any) => acc + item.subtotal, 0);
+
+    return await processPOSTransaction({
+      items: formattedItems,
+      subtotal: sub,
+      discount: 0,
+      total: sub,
+      paymentMethod: saleData.paymentMethod || 'cash',
+      customerName: saleData.studentName || saleData.customerName || 'Walk-in Customer',
+      customerType: saleData.customerType || 'student',
+      cashierName: saleData.cashierName || currentUser?.fullName || 'Cashier',
+      date: new Date().toISOString().split('T')[0],
+    });
+  };
+
+  const sendSMSBroadcast = async (recipientGroup: any, message: string, recipientCount?: number): Promise<BroadcastMessage> => {
+    const count = recipientCount || (recipientGroup === 'all' ? students.length + teachers.length : recipientGroup === 'parents' ? students.length : recipientGroup === 'teachers' ? teachers.length : 1);
+    const validGroup: SMSBroadcastRecipient = typeof recipientGroup === 'string' && (
+      recipientGroup === 'all_parents' || 
+      recipientGroup === 'all_guardians' || 
+      recipientGroup === 'fee_defaulters' || 
+      recipientGroup === 'all_staff' || 
+      recipientGroup === 'staff' || 
+      recipientGroup === 'class_parents' || 
+      recipientGroup === 'class_guardians' || 
+      recipientGroup === 'defaulters' || 
+      recipientGroup === 'custom'
+    ) ? recipientGroup : 'custom';
+
+    return await sendBroadcastMessage({
+      type: 'sms',
+      senderId: settings.smsSenderId || school?.shortCode || 'SCHOOLOS',
+      recipientGroup: validGroup,
+      recipientCount: count,
+      message,
+      sentBy: currentUser?.fullName || 'School Administrator',
+    });
+  };
+
+  const hasAccess = (feature: FeatureKey): boolean => {
+    return checkFeatureAccess(school, feature, currentUser?.role, plans);
+  };
+
+  const resetDemoData = () => {
+    const fresh = resetDatabaseToSeed();
+    setDbState(fresh);
+  };
+
+  return (
+    <SchoolContext.Provider
+      value={{
+        school,
+        allSchools: dbState.schools,
+        plans,
+        students,
+        teachers,
+        classrooms,
+        subjects,
+        attendance,
+        examinations,
+        results,
+        examResults: results,
+        feeStructures,
+        feePayments,
+        storeItems,
+        posTransactions,
+        posSales: posTransactions,
+        messages,
+        auditLogs,
+        settings,
+        schoolUsers,
+        allUsers: allUsersList,
+
+        hasAccess,
+
+        addStudent,
+        updateStudent,
+        deleteStudent,
+
+        addTeacher,
+        updateTeacher,
+        deleteTeacher,
+
+        addClassroom,
+        updateClassroom,
+
+        addSubject,
+
+        markAttendance,
+        markAttendanceBulk,
+        getAttendanceForDate,
+
+        addExamination,
+        saveResults,
+        recordExamResult,
+        generateTerminalReport,
+
+        promoteStudents,
+        executePromotion,
+
+        addFeeStructure,
+        recordFeePayment,
+        getStudentFeeSummaries,
+
+        addStoreItem,
+        updateStoreItem,
+        updateStoreStock,
+        processPOSTransaction,
+        processPOSSale,
+
+        sendBroadcastMessage,
+        sendSMSBroadcast,
+
+        approveSchool,
+        rejectSchool,
+        suspendSchool,
+        updateAnySchool,
+        updateSchoolSubscription,
+        createPlan,
+        updatePlan,
+        deletePlan,
+        setSchoolFeatureOverride,
+        assignSchoolPlan,
+
+        createUserAccount,
+        updateUserAccount,
+        deleteUserAccount,
+
+        updateSettings,
+        updateSchoolInfo,
+        platformCommunication: dbState.platformCommunication || INITIAL_PLATFORM_COMMUNICATION,
+        updatePlatformCommunication,
+        resetDemoData,
+      }}
+    >
+      {children}
+    </SchoolContext.Provider>
+  );
+};
+
+export const useSchool = () => {
+  const context = useContext(SchoolContext);
+  if (!context) {
+    throw new Error('useSchool must be used within a SchoolProvider');
+  }
+  return context;
+};

@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.role == 'superAdmin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superAdmin'
+      );
+    }
+
+    // Allow public registration and read for school verification & authentication
+    match /schools/{schoolId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true; // In production Super Admin or School Owner
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
+    }
+
+    match /plans/{planId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /students/{studentId} {
+      allow read, write: if true;
+    }
+
+    match /teachers/{teacherId} {
+      allow read, write: if true;
+    }
+
+    match /classrooms/{classroomId} {
+      allow read, write: if true;
+    }
+
+    match /subjects/{subjectId} {
+      allow read, write: if true;
+    }
+
+    match /attendance/{attendanceId} {
+      allow read, write: if true;
+    }
+
+    match /examinations/{examId} {
+      allow read, write: if true;
+    }
+
+    match /results/{resultId} {
+      allow read, write: if true;
+    }
+
+    match /feeStructures/{feeId} {
+      allow read, write: if true;
+    }
+
+    match /feePayments/{paymentId} {
+      allow read, write: if true;
+    }
+
+    match /storeItems/{itemId} {
+      allow read, write: if true;
+    }
+
+    match /posTransactions/{txId} {
+      allow read, write: if true;
+    }
+
+    match /messages/{messageId} {
+      allow read, write: if true;
+    }
+
+    match /auditLogs/{logId} {
+      allow read, write: if true;
+    }
+
+    match /platformSettings/{docId} {
+      allow read, write: if true;
+    }
+
+    match /schoolSettings/{schoolId} {
+      allow read, write: if true;
+    }
+
+    // Catch-all fallback
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
