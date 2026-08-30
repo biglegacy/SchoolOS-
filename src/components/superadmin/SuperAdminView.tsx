@@ -7,10 +7,12 @@ import { SuperAdminDashboard } from './SuperAdminDashboard';
 import { SuperAdminSchools } from './SuperAdminSchools';
 import { SuperAdminPortals } from './SuperAdminPortals';
 import { SuperAdminPlans } from './SuperAdminPlans';
+import { SuperAdminSubscriptions } from './SuperAdminSubscriptions';
+import { SuperAdminBilling } from './SuperAdminBilling';
 import { SuperAdminFeatures } from './SuperAdminFeatures';
-import { SuperAdminCommunication } from './SuperAdminCommunication';
 import { SuperAdminBroadcastSMS } from './SuperAdminBroadcastSMS';
 import { SuperAdminBroadcastWhatsApp } from './SuperAdminBroadcastWhatsApp';
+import { SuperAdminNotifications } from './SuperAdminNotifications';
 import { SuperAdminAudit } from './SuperAdminAudit';
 import { SuperAdminPlatformReports } from './SuperAdminPlatformReports';
 import { SuperAdminSecurity } from './SuperAdminSecurity';
@@ -121,7 +123,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
 
   const handleOpenOverrides = (school: School) => {
     setSelectedSchoolForOverride(school);
-    setActiveNav('sub_features');
+    setActiveNav('services_overrides');
   };
 
   const handleImpersonate = (schoolId: string) => {
@@ -161,10 +163,11 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
           onNavigate={(nav: any) => {
             if (nav === 'schools_pending') setActiveNav('schools_pending');
             else if (nav === 'plans') setActiveNav('sub_plans');
-            else if (nav === 'features') setActiveNav('sub_features');
-            else if (nav === 'sms') setActiveNav('services_sms');
-            else if (nav === 'whatsapp') setActiveNav('services_whatsapp');
-            else if (nav === 'audit') setActiveNav('platform_activity');
+            else if (nav === 'features') setActiveNav('services_features');
+            else if (nav === 'portals') setActiveNav('services_portals');
+            else if (nav === 'sms') setActiveNav('comm_sms');
+            else if (nav === 'whatsapp') setActiveNav('comm_whatsapp');
+            else if (nav === 'audit') setActiveNav('platform_audit');
             else setActiveNav('schools_all');
           }}
           onApproveSchool={(sc) => handleApproveSchool(sc.id)}
@@ -208,12 +211,25 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
         />
       )}
 
-      {/* SCHOOL SERVICES: SMS & WHATSAPP SERVICE SETTINGS */}
-      {(activeNav === 'services_sms' || activeNav === 'services_whatsapp') && (
-        <SuperAdminCommunication
-          initialSettings={platformCommunication}
-          activeTab={activeNav === 'services_whatsapp' ? 'whatsapp' : 'sms'}
-          onSaveCommunication={handleSaveCommunication}
+      {/* SCHOOL SERVICES: FEATURE MANAGEMENT */}
+      {activeNav === 'services_features' && (
+        <SuperAdminFeatures
+          schools={allSchools}
+          plans={plans}
+          initialTab="matrix"
+          selectedSchoolForOverride={selectedSchoolForOverride}
+          onSaveOverrides={handleSaveOverrides}
+        />
+      )}
+
+      {/* SCHOOL SERVICES: SCHOOL FEATURE OVERRIDES */}
+      {activeNav === 'services_overrides' && (
+        <SuperAdminFeatures
+          schools={allSchools}
+          plans={plans}
+          initialTab="overrides"
+          selectedSchoolForOverride={selectedSchoolForOverride}
+          onSaveOverrides={handleSaveOverrides}
         />
       )}
 
@@ -226,13 +242,22 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
         />
       )}
 
-      {/* SUBSCRIPTIONS: FEATURE ACCESS & OVERRIDES */}
-      {activeNav === 'sub_features' && (
-        <SuperAdminFeatures
+      {/* SUBSCRIPTIONS: SUBSCRIPTIONS OVERVIEW */}
+      {activeNav === 'sub_subscriptions' && (
+        <SuperAdminSubscriptions
           schools={allSchools}
           plans={plans}
-          selectedSchoolForOverride={selectedSchoolForOverride}
-          onSaveOverrides={handleSaveOverrides}
+          onAssignPlan={handleAssignPlan}
+          onImpersonateSchool={handleImpersonate}
+          onOpenOverrides={handleOpenOverrides}
+        />
+      )}
+
+      {/* SUBSCRIPTIONS: BILLING & LEDGER */}
+      {activeNav === 'sub_billing' && (
+        <SuperAdminBilling
+          schools={allSchools}
+          plans={plans}
         />
       )}
 
@@ -258,12 +283,14 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
         />
       )}
 
-      {/* PLATFORM: PLATFORM ACTIVITY */}
-      {activeNav === 'platform_activity' && (
-        <SuperAdminAudit auditLogs={auditLogs} />
+      {/* COMMUNICATION: PLATFORM NOTIFICATIONS */}
+      {activeNav === 'comm_notifications' && (
+        <SuperAdminNotifications
+          schools={allSchools}
+        />
       )}
 
-      {/* PLATFORM: REPORTS & STATS */}
+      {/* PLATFORM: REPORTS */}
       {activeNav === 'platform_reports' && (
         <SuperAdminPlatformReports
           schools={allSchools}
@@ -272,17 +299,22 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
         />
       )}
 
-      {/* SYSTEM: SYSTEM SETTINGS */}
+      {/* PLATFORM: AUDIT LOGS / ACTIVITY */}
+      {(activeNav === 'platform_audit' || activeNav === 'platform_activity') && (
+        <SuperAdminAudit auditLogs={auditLogs} />
+      )}
+
+      {/* SYSTEM: SETTINGS */}
       {activeNav === 'system_settings' && (
         <SuperAdminSystemSettings />
       )}
 
-      {/* SYSTEM: SECURITY & ACCESS */}
+      {/* SYSTEM: SECURITY */}
       {activeNav === 'system_security' && (
         <SuperAdminSecurity />
       )}
 
-      {/* SYSTEM: ADMIN PROFILE */}
+      {/* SYSTEM: ADMINISTRATOR PROFILE */}
       {activeNav === 'system_profile' && (
         <SuperAdminProfile />
       )}

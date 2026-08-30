@@ -27,7 +27,7 @@ interface StudentManagementViewProps {
 }
 
 export const StudentManagementView: React.FC<StudentManagementViewProps> = ({ onOpenReportModal }) => {
-  const { students, classrooms, addStudent, updateStudent, deleteStudent, getStudentFeeSummaries } = useSchool();
+  const { school, students, classrooms, addStudent, updateStudent, deleteStudent, getStudentFeeSummaries } = useSchool();
   const [searchTerm, setSearchTerm] = useState('');
   const [classFilter, setClassFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -37,16 +37,23 @@ export const StudentManagementView: React.FC<StudentManagementViewProps> = ({ on
 
   const feeSummaries = getStudentFeeSummaries();
 
-  // New student form state
+  const generateStudentId = () => {
+    const prefix = school?.shortCode || 'SCH';
+    const year = new Date().getFullYear();
+    const count = students.length + 1;
+    return `${prefix}/${year}/${String(count).padStart(3, '0')}`;
+  };
+
+  // New student form state - only ID generated, no hardcoded sample values
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     otherNames: '',
-    dateOfBirth: '2015-05-10',
+    dateOfBirth: '',
     gender: 'male' as 'male' | 'female',
     ghanaCardNumber: '',
-    admissionNumber: `AMIA/2026/${Math.floor(100 + Math.random() * 900)}`,
-    classroomId: classrooms[0]?.id || '',
+    admissionNumber: generateStudentId(),
+    classroomId: '',
     guardianName: '',
     guardianRelationship: 'Mother' as const,
     guardianPhone: '',
@@ -54,7 +61,7 @@ export const StudentManagementView: React.FC<StudentManagementViewProps> = ({ on
     guardianOccupation: '',
     medicalConditions: '',
     allergies: '',
-    houseOrTeam: 'Aggrey House (Yellow)',
+    houseOrTeam: '',
   });
 
   const filteredStudents = students.filter(s => {
@@ -71,54 +78,54 @@ export const StudentManagementView: React.FC<StudentManagementViewProps> = ({ on
 
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    const selectedClass = classrooms.find(c => c.id === formData.classroomId) || classrooms[0];
+    const selectedClass = classrooms.find(c => c.id === formData.classroomId);
 
     await addStudent({
-      admissionNumber: formData.admissionNumber,
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      otherNames: formData.otherNames || undefined,
-      dateOfBirth: formData.dateOfBirth,
+      admissionNumber: formData.admissionNumber || generateStudentId(),
+      firstName: formData.firstName.trim(),
+      lastName: formData.lastName.trim(),
+      otherNames: formData.otherNames.trim() || undefined,
+      dateOfBirth: formData.dateOfBirth || '',
       gender: formData.gender,
       ghanaCardNumber: formData.ghanaCardNumber ? formatGhanaCard(formData.ghanaCardNumber) : undefined,
-      currentClassroomId: selectedClass?.id || 'class_b4_gold',
-      classroomName: selectedClass?.name || 'Basic 4 Gold',
-      level: selectedClass?.level || 'Primary 4',
+      currentClassroomId: selectedClass?.id || '',
+      classroomName: selectedClass?.name || 'Unassigned',
+      level: selectedClass?.level || '',
       admissionDate: new Date().toISOString().split('T')[0],
       status: 'active',
-      guardians: [
+      guardians: formData.guardianName ? [
         {
-          name: formData.guardianName,
+          name: formData.guardianName.trim(),
           relationship: formData.guardianRelationship,
-          phone: formData.guardianPhone,
-          email: formData.guardianEmail || undefined,
-          occupation: formData.guardianOccupation || undefined,
+          phone: formData.guardianPhone.trim(),
+          email: formData.guardianEmail.trim() || undefined,
+          occupation: formData.guardianOccupation.trim() || undefined,
           isPrimary: true,
         }
-      ],
-      medicalConditions: formData.medicalConditions || undefined,
-      allergies: formData.allergies || undefined,
-      emergencyContact: {
-        name: formData.guardianName,
-        phone: formData.guardianPhone,
-      },
-      houseOrTeam: formData.houseOrTeam,
+      ] : [],
+      medicalConditions: formData.medicalConditions.trim() || undefined,
+      allergies: formData.allergies.trim() || undefined,
+      emergencyContact: formData.guardianName ? {
+        name: formData.guardianName.trim(),
+        phone: formData.guardianPhone.trim(),
+      } : undefined,
+      houseOrTeam: formData.houseOrTeam.trim() || undefined,
     });
 
     setIsAddModalOpen(false);
     setActionSuccess(`Enrolled student ${formData.firstName} ${formData.lastName} successfully!`);
     setTimeout(() => setActionSuccess(null), 3500);
 
-    // Reset form
+    // Reset form cleanly
     setFormData({
       firstName: '',
       lastName: '',
       otherNames: '',
-      dateOfBirth: '2015-05-10',
+      dateOfBirth: '',
       gender: 'male',
       ghanaCardNumber: '',
-      admissionNumber: `AMIA/2026/${Math.floor(100 + Math.random() * 900)}`,
-      classroomId: classrooms[0]?.id || '',
+      admissionNumber: generateStudentId(),
+      classroomId: '',
       guardianName: '',
       guardianRelationship: 'Mother',
       guardianPhone: '',
@@ -126,7 +133,7 @@ export const StudentManagementView: React.FC<StudentManagementViewProps> = ({ on
       guardianOccupation: '',
       medicalConditions: '',
       allergies: '',
-      houseOrTeam: 'Aggrey House (Yellow)',
+      houseOrTeam: '',
     });
   };
 
@@ -342,110 +349,118 @@ export const StudentManagementView: React.FC<StudentManagementViewProps> = ({ on
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 font-medium">
-              {filteredStudents.map(student => {
-                const feeInfo = feeSummaries.find(f => f.studentId === student.id);
-                const primaryGuardian = student.guardians[0];
+              {filteredStudents.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-xs text-gray-500 font-medium bg-gray-50/50">
+                    No students found matching your search or filter. Click &quot;Admit New Student&quot; to enroll pupils.
+                  </td>
+                </tr>
+              ) : (
+                filteredStudents.map(student => {
+                  const feeInfo = feeSummaries.find(f => f.studentId === student.id);
+                  const primaryGuardian = student.guardians[0];
 
-                return (
-                  <tr key={student.id} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        {student.photoUrl ? (
-                          <img src={student.photoUrl} alt={student.firstName} className="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-xs shrink-0">
-                            {student.firstName[0]}{student.lastName[0]}
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-bold text-gray-900 text-sm">
-                            {student.firstName} {student.lastName} {student.otherNames || ''}
-                          </div>
-                          <div className="text-[11px] text-gray-400 font-mono">
-                            {student.admissionNumber}
+                  return (
+                    <tr key={student.id} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          {student.photoUrl ? (
+                            <img src={student.photoUrl} alt={student.firstName} className="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0" />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-xs shrink-0">
+                              {student.firstName[0]}{student.lastName[0]}
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-bold text-gray-900 text-sm">
+                              {student.firstName} {student.lastName} {student.otherNames || ''}
+                            </div>
+                            <div className="text-[11px] text-gray-400 font-mono">
+                              {student.admissionNumber}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200">
-                        {student.classroomName}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3.5">
-                      <div className="capitalize text-gray-800">{student.gender}</div>
-                      <div className="text-[11px] text-gray-400">{formatDate(student.dateOfBirth)}</div>
-                    </td>
-
-                    <td className="px-4 py-3.5">
-                      <div className="font-semibold text-gray-800">{primaryGuardian?.name || '—'}</div>
-                      <div className="text-[11px] text-gray-500 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-teal-600" />
-                        <span>{primaryGuardian?.phone ? formatGhanaPhone(primaryGuardian.phone) : '—'}</span>
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-3.5">
-                      {feeInfo ? (
-                        <div>
-                          <div className={`font-bold ${feeInfo.balance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            {formatGHS(feeInfo.balance)}
-                          </div>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded ${
-                            feeInfo.status === 'paid' ? 'bg-emerald-100 text-emerald-800' :
-                            feeInfo.status === 'partial' ? 'bg-amber-100 text-amber-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {feeInfo.status.toUpperCase()}
-                          </span>
-                        </div>
-                      ) : (
-                        <span>—</span>
-                      )}
-                    </td>
-
-                    <td className="px-4 py-3.5">
-                      {student.ghanaCardNumber ? (
-                        <span className="font-mono text-[11px] font-semibold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
-                          {student.ghanaCardNumber}
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200">
+                          {student.classroomName}
                         </span>
-                      ) : (
-                        <span className="text-gray-400 text-[11px]">Unlinked</span>
-                      )}
-                    </td>
+                      </td>
 
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => setSelectedStudent(student)}
-                          className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
-                          title="View Profile Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {onOpenReportModal && (
-                          <button
-                            onClick={() => onOpenReportModal(student)}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Generate Terminal Report"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </button>
+                      <td className="px-4 py-3.5">
+                        <div className="capitalize text-gray-800">{student.gender}</div>
+                        <div className="text-[11px] text-gray-400">{formatDate(student.dateOfBirth)}</div>
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <div className="font-semibold text-gray-800">{primaryGuardian?.name || '—'}</div>
+                        <div className="text-[11px] text-gray-500 flex items-center gap-1">
+                          <Phone className="w-3 h-3 text-teal-600" />
+                          <span>{primaryGuardian?.phone ? formatGhanaPhone(primaryGuardian.phone) : '—'}</span>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        {feeInfo ? (
+                          <div>
+                            <div className={`font-bold ${feeInfo.balance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                              {formatGHS(feeInfo.balance)}
+                            </div>
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded ${
+                              feeInfo.status === 'paid' ? 'bg-emerald-100 text-emerald-800' :
+                              feeInfo.status === 'partial' ? 'bg-amber-100 text-amber-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {feeInfo.status.toUpperCase()}
+                            </span>
+                          </div>
+                        ) : (
+                          <span>—</span>
                         )}
-                        <button
-                          onClick={() => handleDelete(student.id, `${student.firstName} ${student.lastName}`)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Withdraw Student"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        {student.ghanaCardNumber ? (
+                          <span className="font-mono text-[11px] font-semibold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
+                            {student.ghanaCardNumber}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-[11px]">Unlinked</span>
+                        )}
+                      </td>
+
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => setSelectedStudent(student)}
+                            className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                            title="View Profile Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {onOpenReportModal && (
+                            <button
+                              onClick={() => onOpenReportModal(student)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Generate Terminal Report"
+                            >
+                              <FileText className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(student.id, `${student.firstName} ${student.lastName}`)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Withdraw Student"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

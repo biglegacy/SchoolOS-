@@ -6,14 +6,18 @@ import {
   Clock, 
   CheckCircle2, 
   Ban, 
-  GraduationCap, 
-  Radio, 
-  MessageSquare, 
-  CreditCard, 
+  Users, 
   Sliders, 
-  Send,
-  History, 
+  SlidersHorizontal,
+  Layers, 
+  CreditCard, 
+  Wallet,
+  MessageSquare, 
+  MessageCircle,
+  Bell,
   BarChart3,
+  History, 
+  Activity,
   Settings, 
   ShieldCheck,
   User,
@@ -31,14 +35,17 @@ export type SuperAdminNavId =
   | 'schools_active'
   | 'schools_suspended'
   | 'services_portals'
-  | 'services_sms'
-  | 'services_whatsapp'
+  | 'services_features'
+  | 'services_overrides'
   | 'sub_plans'
-  | 'sub_features'
+  | 'sub_subscriptions'
+  | 'sub_billing'
   | 'comm_sms'
   | 'comm_whatsapp'
-  | 'platform_activity'
+  | 'comm_notifications'
   | 'platform_reports'
+  | 'platform_audit'
+  | 'platform_activity'
   | 'system_settings'
   | 'system_security'
   | 'system_profile';
@@ -73,18 +80,21 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
       case 'schools_active': return 'Active Educational Institutions';
       case 'schools_suspended': return 'Suspended Institutions';
       case 'services_portals': return 'School Portals Management';
-      case 'services_sms': return 'SMS Service Configuration';
-      case 'services_whatsapp': return 'WhatsApp Business Service';
-      case 'sub_plans': return 'Subscription Plans & Pricing';
-      case 'sub_features': return 'Feature Access & Custom Overrides';
-      case 'comm_sms': return 'Broadcast SMS Engine';
-      case 'comm_whatsapp': return 'Broadcast WhatsApp API';
-      case 'platform_activity': return 'Platform Activity & Audit Trail';
-      case 'platform_reports': return 'Platform Reports & Statistics';
-      case 'system_settings': return 'Platform System Settings';
-      case 'system_security': return 'Security & Access Governance';
-      case 'system_profile': return 'Super Administrator Profile';
-      default: return 'Platform Governance';
+      case 'services_features': return 'Feature Management';
+      case 'services_overrides': return 'School Feature Overrides';
+      case 'sub_plans': return 'Subscription Plans';
+      case 'sub_subscriptions': return 'School Subscriptions';
+      case 'sub_billing': return 'Billing & Revenue';
+      case 'comm_sms': return 'SMS Communication';
+      case 'comm_whatsapp': return 'WhatsApp Business Service';
+      case 'comm_notifications': return 'System Notifications';
+      case 'platform_reports': return 'Platform Reports & Analytics';
+      case 'platform_audit': return 'Audit Logs';
+      case 'platform_activity': return 'Platform Activity';
+      case 'system_settings': return 'System Settings';
+      case 'system_security': return 'Security & Access';
+      case 'system_profile': return 'Administrator Profile';
+      default: return 'Super Admin Console';
     }
   };
 
@@ -113,50 +123,55 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
     {
       groupTitle: 'SCHOOL SERVICES',
       items: [
-        { id: 'services_portals' as SuperAdminNavId, label: 'School Portals', icon: GraduationCap },
-        { id: 'services_sms' as SuperAdminNavId, label: 'SMS Service', icon: Radio },
-        { id: 'services_whatsapp' as SuperAdminNavId, label: 'WhatsApp Service', icon: MessageSquare },
+        { id: 'services_portals' as SuperAdminNavId, label: 'School Portals', icon: Users },
+        { id: 'services_features' as SuperAdminNavId, label: 'Feature Management', icon: Sliders },
+        { id: 'services_overrides' as SuperAdminNavId, label: 'School Feature Overrides', icon: SlidersHorizontal },
       ]
     },
     {
       groupTitle: 'SUBSCRIPTIONS',
       items: [
-        { id: 'sub_plans' as SuperAdminNavId, label: 'Subscription Plans', icon: CreditCard },
-        { id: 'sub_features' as SuperAdminNavId, label: 'Feature Access', icon: Sliders },
+        { id: 'sub_plans' as SuperAdminNavId, label: 'Plans', icon: Layers },
+        { id: 'sub_subscriptions' as SuperAdminNavId, label: 'Subscriptions', icon: CreditCard },
+        { id: 'sub_billing' as SuperAdminNavId, label: 'Billing', icon: Wallet },
       ]
     },
     {
       groupTitle: 'COMMUNICATION',
       items: [
-        { id: 'comm_sms' as SuperAdminNavId, label: 'Broadcast SMS', icon: Send },
-        { id: 'comm_whatsapp' as SuperAdminNavId, label: 'Broadcast WhatsApp', icon: MessageSquare },
+        { id: 'comm_sms' as SuperAdminNavId, label: 'SMS', icon: MessageSquare },
+        { id: 'comm_whatsapp' as SuperAdminNavId, label: 'WhatsApp', icon: MessageCircle },
+        { id: 'comm_notifications' as SuperAdminNavId, label: 'Notifications', icon: Bell },
       ]
     },
     {
       groupTitle: 'PLATFORM',
       items: [
-        { id: 'platform_activity' as SuperAdminNavId, label: 'Platform Activity', icon: History },
-        { id: 'platform_reports' as SuperAdminNavId, label: 'Reports & Stats', icon: BarChart3 },
+        { id: 'platform_reports' as SuperAdminNavId, label: 'Reports', icon: BarChart3 },
+        { id: 'platform_audit' as SuperAdminNavId, label: 'Audit Logs', icon: History },
+        { id: 'platform_activity' as SuperAdminNavId, label: 'Platform Activity', icon: Activity },
       ]
     },
     {
       groupTitle: 'SYSTEM',
       items: [
-        { id: 'system_settings' as SuperAdminNavId, label: 'System Settings', icon: Settings },
-        { id: 'system_security' as SuperAdminNavId, label: 'Security & Access', icon: ShieldCheck },
-        { id: 'system_profile' as SuperAdminNavId, label: 'Admin Profile', icon: User },
+        { id: 'system_settings' as SuperAdminNavId, label: 'Settings', icon: Settings },
+        { id: 'system_security' as SuperAdminNavId, label: 'Security', icon: ShieldCheck },
+        { id: 'system_profile' as SuperAdminNavId, label: 'Administrator Profile', icon: User },
       ]
     }
   ];
 
   const renderNavLinks = (isDrawer = false) => (
-    <div className="flex-1 overflow-y-auto p-3 space-y-4">
+    <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
       {navGroups.map((group, idx) => (
         <div key={idx} className="space-y-1">
-          {(!isCollapsed || isDrawer) && (
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-1.5">
+          {(!isCollapsed || isDrawer) ? (
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-1">
               {group.groupTitle}
             </div>
+          ) : (
+            <div className="w-8 mx-auto border-t border-slate-200 my-2" />
           )}
           <div className="space-y-0.5">
             {group.items.map((item) => {
@@ -164,27 +179,41 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
               const isActive = activeNav === item.id;
 
               return (
-                <button
-                  key={item.id}
-                  onClick={() => handleNavClick(item.id)}
-                  title={isCollapsed && !isDrawer ? item.label : undefined}
-                  className={`w-full flex items-center ${isCollapsed && !isDrawer ? 'justify-center px-0' : 'justify-between px-3'} py-2.5 text-xs transition-all rounded-xl cursor-pointer min-h-[44px] ${
-                    isActive
-                      ? 'bg-teal-50 text-teal-900 font-bold border border-teal-200/80 shadow-2xs'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 font-medium'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-teal-700' : 'text-slate-400'}`} />
-                    {(!isCollapsed || isDrawer) && <span className="truncate">{item.label}</span>}
-                  </div>
+                <div key={item.id} className="relative group">
+                  <button
+                    onClick={() => handleNavClick(item.id)}
+                    className={`w-full flex items-center ${isCollapsed && !isDrawer ? 'justify-center px-0' : 'justify-between px-3'} py-2 text-xs transition-all rounded-xl cursor-pointer min-h-[40px] ${
+                      isActive
+                        ? 'bg-teal-50 text-teal-900 font-bold border border-teal-200/90 shadow-2xs'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 font-medium'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? 'text-teal-700' : 'text-slate-400 group-hover:text-slate-700'}`} />
+                      {(!isCollapsed || isDrawer) && <span className="truncate text-[12.5px]">{item.label}</span>}
+                    </div>
 
-                  {(!isCollapsed || isDrawer) && item.badge !== undefined && (
-                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold shrink-0 ${item.badgeColor || 'bg-teal-100 text-teal-800'}`}>
-                      {item.badge}
-                    </span>
+                    {(!isCollapsed || isDrawer) && item.badge !== undefined && (
+                      <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold shrink-0 ${item.badgeColor || 'bg-teal-100 text-teal-800'}`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Tooltip on collapsed state */}
+                  {isCollapsed && !isDrawer && (
+                    <div className="fixed left-16 ml-2 hidden group-hover:flex items-center z-50 pointer-events-none">
+                      <div className="bg-slate-900 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap animate-in fade-in duration-150">
+                        {item.label}
+                        {item.badge !== undefined && (
+                          <span className="ml-1.5 bg-amber-400 text-slate-900 text-[10px] font-bold px-1.5 py-0.2 rounded">
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -199,11 +228,11 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
       {/* Super Admin Desktop Collapsible Sidebar */}
       <aside 
         className={`hidden md:flex bg-white border-r border-slate-200 flex-col shrink-0 transition-all duration-200 z-30 ${
-          isCollapsed ? 'w-16' : 'w-64'
+          isCollapsed ? 'w-16' : 'w-60'
         }`}
       >
         {/* Brand Header */}
-        <div className="h-16 px-4 border-b border-slate-200 flex items-center justify-between">
+        <div className="h-16 px-3.5 border-b border-slate-200 flex items-center justify-between">
           {!isCollapsed ? (
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-xl bg-teal-800 text-white font-black text-sm flex items-center justify-center shadow-xs shrink-0">
@@ -216,7 +245,7 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
                     ROOT
                   </span>
                 </div>
-                <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider truncate">
+                <div className="text-[10.5px] font-semibold text-slate-500 uppercase tracking-wider truncate">
                   Super Admin
                 </div>
               </div>
@@ -270,7 +299,7 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
       {/* Mobile Slide-Out Drawer for Super Admin */}
       {isMobileDrawerOpen && (
         <div 
-          className="md:hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex animate-in fade-in duration-200"
+          className="md:hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex animate-in fade-in duration-200"
           onClick={() => setIsMobileDrawerOpen(false)}
         >
           <div 
@@ -282,7 +311,10 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
                 <div className="w-7 h-7 bg-teal-800 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-xs">
                   OS
                 </div>
-                <span className="text-xs font-black text-slate-900 tracking-tight uppercase">Super Admin Menu</span>
+                <div>
+                  <div className="text-xs font-bold text-slate-900 leading-tight">SchoolOS</div>
+                  <div className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider">Super Admin</div>
+                </div>
               </div>
               <button
                 onClick={() => setIsMobileDrawerOpen(false)}
@@ -328,7 +360,7 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               <span className="text-xs font-medium text-slate-400 hidden sm:inline">Platform</span>
               <span className="text-slate-300 hidden sm:inline">/</span>
-              <h1 className="text-xs sm:text-sm font-bold text-slate-900 truncate max-w-[150px] sm:max-w-none">
+              <h1 className="text-xs sm:text-sm font-bold text-slate-900 truncate max-w-[160px] sm:max-w-none">
                 {getSectionTitle(activeNav)}
               </h1>
             </div>

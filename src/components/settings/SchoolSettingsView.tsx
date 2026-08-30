@@ -26,6 +26,7 @@ export const SchoolSettingsView: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -76,31 +77,36 @@ export const SchoolSettingsView: React.FC = () => {
 
   const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !school) return;
+    if (!file || !school || isUploadingLogo) return;
 
-    // Validate size (under 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError('Image size exceeds 5MB limit. Please upload a smaller image.');
+    // Validate size (under 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('Image size exceeds 10MB limit. Please select a smaller image.');
       return;
     }
 
     setIsUploadingLogo(true);
+    setUploadProgress(15);
     setUploadError(null);
 
     try {
-      // 1. Upload to Firebase Storage
-      const downloadURL = await uploadSchoolLogo(school.id, file);
+      // 1. Upload & compress logo quickly
+      const logoUrl = await uploadSchoolLogo(school.id, file, (percent) => {
+        setUploadProgress(percent);
+      });
       
-      // 2. Persist in local state and Firestore
-      setFormData(prev => ({ ...prev, logo: downloadURL }));
-      await updateSchoolInfo({ logo: downloadURL });
+      // 2. Immediately update local form state and persist to database & Firestore
+      setFormData(prev => ({ ...prev, logo: logoUrl }));
+      await updateSchoolInfo({ logo: logoUrl });
       
-      showToast('School crest uploaded and synchronized successfully to Firebase!');
+      setUploadProgress(100);
+      showToast('School logo updated and synchronized successfully!');
     } catch (err: any) {
       console.error('Logo upload error:', err);
-      setUploadError(err?.message || 'Failed to upload school logo. Please try again.');
+      setUploadError(err?.message || 'Failed to update school logo. Please try again.');
     } finally {
       setIsUploadingLogo(false);
+      setUploadProgress(0);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -200,9 +206,16 @@ export const SchoolSettingsView: React.FC = () => {
             )}
 
             {isUploadingLogo && (
-              <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5">
-                <RefreshCw className="w-5 h-5 text-teal-700 animate-spin" />
-                <span className="text-[10px] font-bold text-teal-900">Uploading...</span>
+              <div className="absolute inset-0 bg-white/90 backdrop-blur-xs flex flex-col items-center justify-center gap-2 p-3 text-center z-10">
+                <RefreshCw className="w-6 h-6 text-teal-700 animate-spin" />
+                <span className="text-xs font-bold text-teal-950">Uploading Crest...</span>
+                <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    className="bg-teal-700 h-1.5 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono text-slate-500">{uploadProgress}%</span>
               </div>
             )}
           </div>

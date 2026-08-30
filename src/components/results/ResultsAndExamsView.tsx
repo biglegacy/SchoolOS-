@@ -44,8 +44,8 @@ export const ResultsAndExamsView: React.FC = () => {
         r => r.studentId === st.id && r.subject === selectedSubject && r.term === selectedTerm
       );
       initial[st.id] = {
-        classScore: existing ? existing.classScore : 24,
-        examScore: existing ? existing.examScore : 58,
+        classScore: existing ? existing.classScore : 0,
+        examScore: existing ? existing.examScore : 0,
       };
     });
     return initial;
@@ -213,7 +213,89 @@ export const ResultsAndExamsView: React.FC = () => {
           <span className="text-xs text-gray-500 font-medium">{classStudents.length} Students Evaluated</span>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile Scores Card List (Hidden on tablet/desktop) */}
+        <div className="block md:hidden divide-y divide-gray-100">
+          {classStudents.length === 0 ? (
+            <div className="p-8 text-center text-xs text-gray-500">
+              No students enrolled in this classroom. Admit students to record assessments.
+            </div>
+          ) : (
+            classStudents.map((student) => {
+              const entry = scores[student.id] || { classScore: 0, examScore: 0 };
+              const total = calculateTotalScore(entry.classScore, entry.examScore);
+              const grade = getGESGrade(total);
+              const remarks = getGradeRemarks(grade);
+
+              return (
+                <div key={student.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-gray-900 text-sm">
+                        {student.firstName} {student.lastName}
+                      </div>
+                      <div className="text-[11px] text-gray-400 font-mono">
+                        {student.admissionNumber}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg">
+                        {total}%
+                      </span>
+                      <span className={`inline-flex items-center justify-center min-w-7 h-7 px-2 rounded-full text-xs font-black ${
+                        grade === 'A' || grade === 'B+' ? 'bg-emerald-100 text-emerald-800' :
+                        grade === 'B' || grade === 'C' ? 'bg-teal-100 text-teal-800' :
+                        grade === 'D' ? 'bg-blue-100 text-blue-800' :
+                        grade === 'E' ? 'bg-amber-100 text-amber-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {grade}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Score Input Grid */}
+                  <div className="grid grid-cols-2 gap-3 bg-gray-50/80 p-3 rounded-xl border border-gray-100">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
+                        Class Score (30%)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="30"
+                        value={entry.classScore}
+                        onChange={e => handleClassScoreChange(student.id, Number(e.target.value))}
+                        className="w-full px-3 py-2 text-center font-bold text-gray-900 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
+                        Exam Score (70%)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="70"
+                        value={entry.examScore}
+                        onChange={e => handleExamScoreChange(student.id, Number(e.target.value))}
+                        className="w-full px-3 py-2 text-center font-bold text-gray-900 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] text-gray-500 italic">
+                    Remarks: <span className="font-semibold text-gray-700 not-italic">{remarks}</span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Table (Hidden on mobile) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs text-gray-600">
             <thead className="bg-gray-50 border-b border-gray-200 text-gray-700 font-bold uppercase text-[10px] tracking-wider">
               <tr>
@@ -227,70 +309,78 @@ export const ResultsAndExamsView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 font-medium">
-              {classStudents.map((student, idx) => {
-                const entry = scores[student.id] || { classScore: 24, examScore: 58 };
-                const total = calculateTotalScore(entry.classScore, entry.examScore);
-                const grade = getGESGrade(total);
-                const remarks = getGradeRemarks(grade);
+              {classStudents.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-xs text-gray-500 font-medium bg-gray-50/50">
+                    No students found in this class. Admit pupils or choose another classroom to enter examination marks.
+                  </td>
+                </tr>
+              ) : (
+                classStudents.map((student, idx) => {
+                  const entry = scores[student.id] || { classScore: 0, examScore: 0 };
+                  const total = calculateTotalScore(entry.classScore, entry.examScore);
+                  const grade = getGESGrade(total);
+                  const remarks = getGradeRemarks(grade);
 
-                return (
-                  <tr key={student.id} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div className="font-bold text-gray-900 text-sm">
-                        {student.firstName} {student.lastName}
-                      </div>
-                    </td>
+                  return (
+                    <tr key={student.id} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="font-bold text-gray-900 text-sm">
+                          {student.firstName} {student.lastName}
+                        </div>
+                      </td>
 
-                    <td className="px-4 py-3.5 font-mono text-[11px] text-gray-400">
-                      {student.admissionNumber}
-                    </td>
+                      <td className="px-4 py-3.5 font-mono text-[11px] text-gray-400">
+                        {student.admissionNumber}
+                      </td>
 
-                    <td className="px-4 py-3.5 text-center">
-                      <input
-                        type="number"
-                        min="0"
-                        max="30"
-                        value={entry.classScore}
-                        onChange={e => handleClassScoreChange(student.id, Number(e.target.value))}
-                        className="w-16 px-2 py-1 text-center font-bold text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
-                      />
-                    </td>
+                      <td className="px-4 py-3.5 text-center">
+                        <input
+                          type="number"
+                          min="0"
+                          max="30"
+                          value={entry.classScore}
+                          onChange={e => handleClassScoreChange(student.id, Number(e.target.value))}
+                          className="w-16 px-2 py-1 text-center font-bold text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                        />
+                      </td>
 
-                    <td className="px-4 py-3.5 text-center">
-                      <input
-                        type="number"
-                        min="0"
-                        max="70"
-                        value={entry.examScore}
-                        onChange={e => handleExamScoreChange(student.id, Number(e.target.value))}
-                        className="w-16 px-2 py-1 text-center font-bold text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
-                      />
-                    </td>
+                      <td className="px-4 py-3.5 text-center">
+                        <input
+                          type="number"
+                          min="0"
+                          max="70"
+                          value={entry.examScore}
+                          onChange={e => handleExamScoreChange(student.id, Number(e.target.value))}
+                          className="w-16 px-2 py-1 text-center font-bold text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                        />
+                      </td>
 
-                    <td className="px-4 py-3.5 text-center">
-                      <span className="text-sm font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-md">
-                        {total}
-                      </span>
-                    </td>
+                      <td className="px-4 py-3.5 text-center">
+                        <span className="text-sm font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-md">
+                          {total}
+                        </span>
+                      </td>
 
-                    <td className="px-4 py-3.5 text-center">
-                      <span className={`inline-flex items-center justify-center min-w-7 h-7 px-1.5 rounded-full text-xs font-black ${
-                        grade === 'A' || grade === 'B+' ? 'bg-emerald-100 text-emerald-800' :
-                        grade === 'B' || grade === 'C' ? 'bg-teal-100 text-teal-800' :
-                        grade === 'D' ? 'bg-blue-100 text-blue-800' :
-                        grade === 'E' ? 'bg-amber-100 text-amber-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {grade}
-                      </span>
-                    </td>
+                      <td className="px-4 py-3.5 text-center">
+                        <span className={`inline-flex items-center justify-center min-w-7 h-7 px-1.5 rounded-full text-xs font-black ${
+                          grade === 'A' || grade === 'B+' ? 'bg-emerald-100 text-emerald-800' :
+                          grade === 'B' || grade === 'C' ? 'bg-teal-100 text-teal-800' :
+                          grade === 'D' ? 'bg-blue-100 text-blue-800' :
+                          grade === 'E' ? 'bg-amber-100 text-amber-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {grade}
+                        </span>
+                      </td>
 
-                    <td className="px-5 py-3.5 text-right font-medium text-gray-700">
-                      {remarks}
-                    </td>
-                  </tr>
-                );
-              })}
+                      <td className="px-5 py-3.5 text-right font-medium text-gray-700 text-xs">
+                        {remarks}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

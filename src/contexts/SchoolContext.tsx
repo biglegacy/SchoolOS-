@@ -528,14 +528,14 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const student = students.find(s => s.id === studentId);
     if (!student) return null;
 
-    const studentResults = results.filter(r => r.studentId === studentId && r.term === term && r.academicYear === academicYear);
+    const studentResults = results.filter(r => r.studentId === studentId && (r.term === term || (!r.term && term === 'Term 3')) && (r.academicYear === academicYear || !r.academicYear));
     
-    // Attendance stats
-    const studentAttendance = attendance.filter(a => a.studentId === studentId && a.term === term && a.academicYear === academicYear);
-    const totalDays = Math.max(studentAttendance.length, 65);
-    const daysPresent = studentAttendance.filter(a => a.status === 'present' || a.status === 'late').length || 62;
-    const daysAbsent = totalDays - daysPresent;
-    const percentageAttendance = Math.round((daysPresent / totalDays) * 100);
+    // Real Attendance stats
+    const studentAttendance = attendance.filter(a => a.studentId === studentId && (a.term === term || !a.term) && (a.academicYear === academicYear || !a.academicYear));
+    const totalDays = studentAttendance.length;
+    const daysPresent = studentAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
+    const daysAbsent = studentAttendance.filter(a => a.status === 'absent').length;
+    const percentageAttendance = totalDays > 0 ? Math.round((daysPresent / totalDays) * 100) : 0;
 
     const subjectBreakdown = studentResults.map(res => ({
       subjectName: res.subjectName,
@@ -543,20 +543,20 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       examScore: res.examScore,
       total: res.totalScore,
       grade: res.grade,
-      position: res.position || 1,
-      remarks: res.teacherRemarks || res.gradeRemark
+      position: res.position || 0,
+      remarks: res.teacherRemarks || res.gradeRemark || ''
     }));
 
     const totalScores = (studentResults || []).reduce((acc, curr) => acc + (curr?.totalScore || 0), 0);
-    const overallAverage = studentResults.length > 0 ? Math.round(totalScores / studentResults.length) : 78;
-    const overallGradeInfo = calculateGhanaGrade(overallAverage);
+    const overallAverage = studentResults.length > 0 ? Math.round(totalScores / studentResults.length) : 0;
+    const overallGradeInfo = studentResults.length > 0 ? calculateGhanaGrade(overallAverage) : { grade: '—', remark: 'Pending Assessment' };
 
     const classStudents = students.filter(s => s.currentClassroomId === student.currentClassroomId);
-    const totalStudentsInClass = Math.max(classStudents.length, 28);
-    const overallPosition = studentResults[0]?.position || 2;
+    const totalStudentsInClass = classStudents.length;
+    const overallPosition = studentResults[0]?.position || 0;
 
-    const promoted = overallAverage >= 50;
-    const nextLevel = student.level.includes('Primary 4') ? 'Primary 5 (Basic 5)' : 'Next Level';
+    const promoted = studentResults.length > 0 && overallAverage >= 50;
+    const nextLevel = student.level ? `Promoted to Next Form` : '';
 
     return {
       id: `report_${studentId}_${term}_${academicYear}`,
@@ -579,8 +579,8 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       overallGrade: overallGradeInfo.grade,
       overallPosition,
       totalStudentsInClass,
-      classTeacherRemarks: generateTeacherRemark(overallAverage),
-      headTeacherRemarks: generateHeadTeacherRemark(overallAverage, promoted, nextLevel),
+      classTeacherRemarks: studentResults.length > 0 ? generateTeacherRemark(overallAverage) : 'Assessments pending entry.',
+      headTeacherRemarks: studentResults.length > 0 ? generateHeadTeacherRemark(overallAverage, promoted, nextLevel) : 'End of term review pending marks finalization.',
       promoted,
       nextClass: nextLevel,
       reopeningDate: settings.reopeningDate,
@@ -683,16 +683,21 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const getStudentFeeSummaries = (): StudentFeeSummary[] => {
     return students.map(student => {
-      const applicableFee = feeStructures.find(f => f.classroomId === student.currentClassroomId) || feeStructures[0];
-      const totalBilled = applicableFee ? applicableFee.totalAmount : 2900;
+      const applicableFee = feeStructures.find(f => f.classroomId === student.currentClassroomId);
+      const totalBilled = applicableFee ? applicableFee.totalAmount : 0;
       
       const payments = (feePayments || []).filter(p => p.studentId === student.id);
       const totalPaid = (payments || []).reduce((acc, curr) => acc + (curr?.amount || 0), 0);
       const balance = totalBilled - totalPaid;
 
       let status: 'paid' | 'partial' | 'unpaid' | 'overpaid' = 'unpaid';
-      if (balance <= 0 && totalPaid > 0) status = balance < 0 ? 'overpaid' : 'paid';
-      else if (totalPaid > 0 && balance > 0) status = 'partial';
+      if (totalBilled > 0) {
+        if (balance <= 0 && totalPaid > 0) status = balance < 0 ? 'overpaid' : 'paid';
+        else if (totalPaid > 0 && balance > 0) status = 'partial';
+        else status = 'unpaid';
+      } else {
+        status = totalPaid > 0 ? 'paid' : 'unpaid';
+      }
 
       return {
         studentId: student.id,

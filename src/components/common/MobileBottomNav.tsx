@@ -14,7 +14,8 @@ import {
   Calculator, 
   Building2,
   CalendarCheck2,
-  ShoppingCart
+  ShoppingCart,
+  MessageSquare
 } from 'lucide-react';
 
 interface MobileBottomNavProps {
@@ -66,6 +67,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         { id: 'parent_portal', label: 'Wards', icon: HeartHandshake },
         { id: 'reports', label: 'Reports', icon: FileText },
         { id: 'fees', label: 'Fees', icon: CreditCard },
+        { id: 'communications', label: 'Notices', icon: MessageSquare },
         { id: 'menu', label: 'Menu', icon: Menu, onClick: onOpenMenu },
       ];
     }
@@ -73,8 +75,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     if (role === 'student') {
       return [
         { id: 'student_portal', label: 'Learning', icon: User },
-        { id: 'results', label: 'Results', icon: FileSpreadsheet },
+        { id: 'results', label: 'Scores', icon: FileSpreadsheet },
         { id: 'reports', label: 'Report', icon: FileText },
+        { id: 'attendance', label: 'Roll Log', icon: CalendarCheck2 },
         { id: 'menu', label: 'Menu', icon: Menu, onClick: onOpenMenu },
       ];
     }

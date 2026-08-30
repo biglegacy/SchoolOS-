@@ -136,6 +136,30 @@ export interface Student {
   updatedAt: string;
 }
 
+export interface TeacherSubjectAssignment {
+  id?: string;
+  subjectId?: string;
+  subjectName: string;
+  classroomId: string;
+  classroomName: string;
+}
+
+export interface TimetableSlot {
+  id: string;
+  schoolId?: string;
+  teacherId?: string;
+  teacherName?: string;
+  subjectName: string;
+  classroomId: string;
+  classroomName: string;
+  day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
+  startTime: string; // e.g. "08:00"
+  endTime: string;   // e.g. "08:45"
+  period?: string;   // e.g. "Period 1"
+  periodName?: string; // e.g. "Period 1"
+  room?: string;
+}
+
 export interface Teacher {
   id: string;
   schoolId: string;
@@ -145,21 +169,22 @@ export interface Teacher {
   lastName: string;
   email: string;
   phone: string;
-  gender: 'male' | 'female';
+  gender?: 'male' | 'female';
   ghanaCardNumber?: string;
   qualification: string;
   specialization?: string;
-  dateJoined: string;
+  dateJoined?: string;
+  employmentDate?: string;
   status: 'active' | 'on_leave' | 'inactive';
-  assignedClassroomIds: string[];
-  assignedSubjects: Array<{
-    subjectId: string;
-    subjectName: string;
-    classroomId: string;
-    classroomName: string;
-  }>;
-  createdAt: string;
-  updatedAt: string;
+  photoUrl?: string;
+  assignedClassroomId?: string; // Optional: If serving as Form Tutor / Class Master
+  assignedClassroomName?: string;
+  assignedClassroomIds?: string[];
+  subjectsTaught?: string[];
+  assignedSubjects?: TeacherSubjectAssignment[];
+  timetable?: TimetableSlot[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Classroom {
@@ -194,6 +219,9 @@ export interface AttendanceRecord {
   id: string;
   schoolId: string;
   classroomId: string;
+  classroomName?: string;
+  subjectId?: string;
+  subjectName?: string;
   studentId: string;
   studentName: string;
   admissionNumber: string;
@@ -203,6 +231,7 @@ export interface AttendanceRecord {
   term?: string;
   academicYear?: string;
   recordedBy?: string;
+  recordedById?: string;
   createdAt?: string;
 }
 
@@ -230,17 +259,22 @@ export interface ExaminationResult {
   classroomName: string;
   subjectId?: string;
   subjectName: string;
-  classScore: number; // 0-30%
-  examScore: number; // 0-70%
+  subject?: string;
+  assessmentType?: 'sba' | 'class_test' | 'assignment' | 'project' | 'exam' | 'continuous_assessment' | string;
+  classScore: number; // 0-30% Continuous Assessment
+  examScore: number; // 0-70% Terminal Examination
   totalScore: number; // 0-100%
-  grade: 'A' | 'B+' | 'B' | 'C' | 'D' | 'E' | 'F';
+  grade: 'A' | 'B+' | 'B' | 'C' | 'D' | 'E' | 'F' | string;
   gradeRemark: string;
   position?: number;
   totalStudents?: number;
   teacherRemarks?: string;
   enteredBy?: string;
+  enteredById?: string;
   academicYear?: string;
-  term?: 'Term 1' | 'Term 2' | 'Term 3';
+  term?: 'Term 1' | 'Term 2' | 'Term 3' | string;
+  examType?: string;
+  classAverage?: number;
   createdAt?: string;
   updatedAt?: string;
 }

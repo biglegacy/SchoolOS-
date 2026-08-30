@@ -87,6 +87,83 @@ const MainAppLayout: React.FC = () => {
   };
 
   const renderActiveView = () => {
+    const role = currentUser.role;
+
+    // Strict RBAC View Resolution for Parent Role
+    if (role === 'parent') {
+      switch (activeTab) {
+        case 'reports':
+          return <ParentPortalView initialSubTab="reports" />;
+        case 'fees':
+          return <ParentPortalView initialSubTab="fees" />;
+        case 'attendance':
+          return <ParentPortalView initialSubTab="attendance" />;
+        case 'communications':
+          return <ParentPortalView initialSubTab="announcements" />;
+        case 'parent_portal':
+        default:
+          return <ParentPortalView initialSubTab="overview" />;
+      }
+    }
+
+    // Strict RBAC View Resolution for Student Role
+    if (role === 'student') {
+      switch (activeTab) {
+        case 'results':
+          return <StudentPortalView initialSubTab="results" />;
+        case 'reports':
+          return <StudentPortalView initialSubTab="reports" />;
+        case 'attendance':
+          return <StudentPortalView initialSubTab="attendance" />;
+        case 'communications':
+          return <StudentPortalView initialSubTab="notices" />;
+        case 'student_portal':
+        default:
+          return <StudentPortalView initialSubTab="overview" />;
+      }
+    }
+
+    // Strict RBAC View Resolution for Teacher Role
+    if (role === 'teacher') {
+      switch (activeTab) {
+        case 'attendance':
+          return <TeacherPortalView onNavigate={setActiveTab} initialSubTab="attendance" />;
+        case 'results':
+          return <TeacherPortalView onNavigate={setActiveTab} initialSubTab="results" />;
+        case 'reports':
+          return <TeacherPortalView onNavigate={setActiveTab} initialSubTab="reports" />;
+        case 'students':
+          return <TeacherPortalView onNavigate={setActiveTab} initialSubTab="students" />;
+        case 'communications':
+          return <TeacherPortalView onNavigate={setActiveTab} initialSubTab="notices" />;
+        case 'teacher_portal':
+        default:
+          return <TeacherPortalView onNavigate={setActiveTab} initialSubTab="overview" />;
+      }
+    }
+
+    // Strict RBAC View Resolution for Accountant Role
+    if (role === 'accountant') {
+      switch (activeTab) {
+        case 'fees':
+          return <FeesManagementView />;
+        case 'pos':
+          return <POSRegisterView />;
+        case 'store':
+          return <StoreInventoryView />;
+        case 'students':
+          return <StudentManagementView onOpenReportModal={setReportModalStudent} />;
+        case 'communications':
+          return <CommunicationsView />;
+        case 'analytics':
+          return <ReportsCenterView />;
+        case 'accountant_portal':
+        default:
+          return <AccountantPortalView onNavigate={setActiveTab} />;
+      }
+    }
+
+    // Administrator / Principal / School Owner / Super Admin Full Workspace
     switch (activeTab) {
       case 'school_dashboard':
         return <SchoolAdminDashboard onNavigate={setActiveTab} />;

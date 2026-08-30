@@ -1,1 +1,33 @@
 @import "tailwindcss";
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .print-hidden,
+  button,
+  nav,
+  aside,
+  header {
+    display: none !important;
+  }
+
+  .print-page-break-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-page-break-after {
+    page-break-after: always;
+    break-after: page;
+  }
+}

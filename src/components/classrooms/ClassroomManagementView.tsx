@@ -14,48 +14,49 @@ import {
 import { Modal } from '../common/Modal';
 
 export const ClassroomManagementView: React.FC = () => {
-  const { classrooms, teachers, students, addClassroom } = useSchool();
+  const { school, classrooms, teachers, students, addClassroom } = useSchool();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
-    level: 'Primary 5',
-    stream: 'Gold',
-    capacity: 40,
-    roomNumber: 'Block C - Room 104',
-    classTeacherId: teachers[0]?.id || '',
-    subjects: 'English Language, Mathematics, Integrated Science, Ghanaian Language (Twi), Our World Our People (OWOP), Religious and Moral Education (RME), Creative Arts and Design, Computing',
+    level: '',
+    stream: '',
+    capacity: 35,
+    roomNumber: '',
+    classTeacherId: '',
+    subjects: '',
   });
 
   const handleCreateClassroom = async (e: React.FormEvent) => {
     e.preventDefault();
     const assignedTeacher = teachers.find(t => t.id === formData.classTeacherId);
+    const className = formData.name.trim() || `${formData.level} ${formData.stream}`.trim() || 'New Classroom';
 
     await addClassroom({
-      name: formData.name || `${formData.level} ${formData.stream}`,
-      level: formData.level,
-      stream: formData.stream,
-      academicYear: '2026/2027',
+      name: className,
+      level: formData.level.trim() || 'Primary',
+      stream: formData.stream.trim() || 'A',
+      academicYear: school?.currentAcademicYear || `${new Date().getFullYear()}/${new Date().getFullYear() + 1}`,
       capacity: Number(formData.capacity) || 35,
-      roomNumber: formData.roomNumber,
+      roomNumber: formData.roomNumber.trim() || 'Room 1',
       classTeacherId: assignedTeacher?.id,
       classTeacherName: assignedTeacher ? `${assignedTeacher.firstName} ${assignedTeacher.lastName}` : undefined,
-      subjects: formData.subjects.split(',').map(s => s.trim()),
+      subjects: formData.subjects ? formData.subjects.split(',').map(s => s.trim()).filter(Boolean) : [],
     });
 
     setIsAddModalOpen(false);
-    setActionSuccess(`Classroom ${formData.name || `${formData.level} ${formData.stream}`} created successfully!`);
+    setActionSuccess(`Classroom ${className} created successfully!`);
     setTimeout(() => setActionSuccess(null), 3500);
 
     setFormData({
       name: '',
-      level: 'Primary 5',
-      stream: 'Gold',
-      capacity: 40,
-      roomNumber: 'Block C - Room 104',
-      classTeacherId: teachers[0]?.id || '',
-      subjects: 'English Language, Mathematics, Integrated Science, Ghanaian Language (Twi), Our World Our People (OWOP), Religious and Moral Education (RME), Creative Arts and Design, Computing',
+      level: '',
+      stream: '',
+      capacity: 35,
+      roomNumber: '',
+      classTeacherId: '',
+      subjects: '',
     });
   };
 
@@ -84,80 +85,92 @@ export const ClassroomManagementView: React.FC = () => {
       )}
 
       {/* Classroom Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {classrooms.map(c => {
-          const enrolledStudents = students.filter(s => s.currentClassroomId === c.id);
-          const fillPercentage = Math.round((enrolledStudents.length / c.capacity) * 100);
+      {classrooms.length === 0 ? (
+        <div className="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center space-y-3">
+          <div className="w-12 h-12 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center mx-auto">
+            <Layers className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm font-bold text-gray-800">No Classrooms Configured</h3>
+          <p className="text-xs text-gray-500 max-w-sm mx-auto">
+            Your school doesn&apos;t have any active classes or streams yet. Click &quot;Create New Class&quot; to set up your classrooms.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {classrooms.map(c => {
+            const enrolledStudents = students.filter(s => s.currentClassroomId === c.id);
+            const fillPercentage = c.capacity > 0 ? Math.round((enrolledStudents.length / c.capacity) * 100) : 0;
 
-          return (
-            <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs flex flex-col justify-between gap-4 hover:border-teal-300 transition-all">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-teal-50 text-teal-700">
-                      <Layers className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-gray-900">{c.name}</h3>
-                      <p className="text-[11px] text-gray-500">{c.level} • Stream {c.stream}</p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800">
-                    {c.academicYear}
-                  </span>
-                </div>
-
-                <div className="space-y-2 text-xs text-gray-600 bg-gray-50/70 p-3 rounded-lg border border-gray-100">
+            return (
+              <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs flex flex-col justify-between gap-4 hover:border-teal-300 transition-all">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Class Teacher:</span>
-                    <span className="font-bold text-gray-900">{c.classTeacherName || 'Unassigned'}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-lg bg-teal-50 text-teal-700">
+                        <Layers className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">{c.name}</h3>
+                        <p className="text-[11px] text-gray-500">{c.level} • Stream {c.stream}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800">
+                      {c.academicYear}
+                    </span>
                   </div>
-                  {c.roomNumber && (
+
+                  <div className="space-y-2 text-xs text-gray-600 bg-gray-50/70 p-3 rounded-lg border border-gray-100">
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Location:</span>
-                      <span className="font-medium text-gray-800">{c.roomNumber}</span>
+                      <span className="text-gray-500">Class Teacher:</span>
+                      <span className="font-bold text-gray-900">{c.classTeacherName || 'Unassigned'}</span>
                     </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Active Students:</span>
-                    <span className="font-bold text-teal-700">{enrolledStudents.length} of {c.capacity}</span>
-                  </div>
+                    {c.roomNumber && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500">Location:</span>
+                        <span className="font-medium text-gray-800">{c.roomNumber}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Active Students:</span>
+                      <span className="font-bold text-teal-700">{enrolledStudents.length} of {c.capacity}</span>
+                    </div>
 
-                  <div className="pt-1">
-                    <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full transition-all ${
-                          fillPercentage > 90 ? 'bg-amber-500' : 'bg-teal-600'
-                        }`}
-                        style={{ width: `${Math.min(100, fillPercentage)}%` }}
-                      />
+                    <div className="pt-1">
+                      <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all ${
+                            fillPercentage > 90 ? 'bg-amber-500' : 'bg-teal-600'
+                          }`}
+                          style={{ width: `${Math.min(100, fillPercentage)}%` }}
+                        />
+                      </div>
                     </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-gray-100">
+                  <div className="text-[10px] font-bold uppercase text-gray-400 mb-1.5 flex items-center gap-1">
+                    <BookOpen className="w-3 h-3" />
+                    <span>Curriculum Subjects ({c.subjects?.length || 0})</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {(c.subjects || []).slice(0, 4).map((subj, idx) => (
+                      <span key={idx} className="text-[10px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded-md font-medium">
+                        {subj}
+                      </span>
+                    ))}
+                    {c.subjects && c.subjects.length > 4 && (
+                      <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded font-bold">
+                        +{c.subjects.length - 4} more
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
-
-              <div className="pt-3 border-t border-gray-100">
-                <div className="text-[10px] font-bold uppercase text-gray-400 mb-1.5 flex items-center gap-1">
-                  <BookOpen className="w-3 h-3" />
-                  <span>Curriculum Subjects ({c.subjects?.length || 0})</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {(c.subjects || []).slice(0, 4).map((subj, idx) => (
-                    <span key={idx} className="text-[10px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded-md font-medium">
-                      {subj}
-                    </span>
-                  ))}
-                  {c.subjects && c.subjects.length > 4 && (
-                    <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded font-bold">
-                      +{c.subjects.length - 4} more
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* CREATE CLASSROOM MODAL */}
       <Modal

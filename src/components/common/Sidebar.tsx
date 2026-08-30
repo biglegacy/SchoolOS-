@@ -129,16 +129,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           groupTitle: 'TEACHING WORKSPACE',
           items: [
             { id: 'teacher_portal', label: 'My Teacher Portal', icon: GraduationCap },
-            { id: 'attendance', label: 'Daily Attendance', icon: CalendarCheck2, featureKey: 'attendance' },
-            { id: 'results', label: 'Exams & Continuous Assessment', icon: FileSpreadsheet, featureKey: 'results' },
-            { id: 'reports', label: 'Terminal Report Cards', icon: FileText, featureKey: 'reports' },
-          ]
-        },
-        {
-          groupTitle: 'CAMPUS CONTEXT',
-          items: [
-            { id: 'students', label: 'Class Students', icon: Users, featureKey: 'students' },
-            { id: 'classrooms', label: 'Classrooms & Streams', icon: Layers, featureKey: 'classrooms' },
+            { id: 'attendance', label: 'Daily Roll Call', icon: CalendarCheck2, featureKey: 'attendance' },
+            { id: 'results', label: 'Continuous Assessment (30/70)', icon: FileSpreadsheet, featureKey: 'results' },
+            { id: 'reports', label: 'Class Terminal Reports', icon: FileText, featureKey: 'reports' },
+            { id: 'students', label: 'Class Students & Guardians', icon: Users, featureKey: 'students' },
           ]
         }
       ];
@@ -152,6 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             { id: 'parent_portal', label: 'My Ward(s) Overview', icon: HeartHandshake },
             { id: 'reports', label: 'Terminal Report Cards', icon: FileText, featureKey: 'reports' },
             { id: 'fees', label: 'School Fees & Receipts', icon: CreditCard, featureKey: 'fees' },
+            { id: 'communications', label: 'School Circulars & Notices', icon: MessageSquare, featureKey: 'communications' },
           ]
         }
       ];
@@ -163,8 +158,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           groupTitle: 'STUDENT PORTAL',
           items: [
             { id: 'student_portal', label: 'My Learning Dashboard', icon: User },
-            { id: 'results', label: 'My Exam Results', icon: FileSpreadsheet, featureKey: 'results' },
-            { id: 'reports', label: 'My Report Card', icon: FileText, featureKey: 'reports' },
+            { id: 'results', label: 'My Subject Scores', icon: FileSpreadsheet, featureKey: 'results' },
+            { id: 'reports', label: 'My Terminal Report', icon: FileText, featureKey: 'reports' },
+            { id: 'attendance', label: 'My Attendance Record', icon: CalendarCheck2, featureKey: 'attendance' },
+            { id: 'communications', label: 'School Announcements', icon: MessageSquare, featureKey: 'communications' },
           ]
         }
       ];
