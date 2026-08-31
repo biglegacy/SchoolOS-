@@ -17,7 +17,12 @@ import {
   Globe, 
   Phone, 
   Mail, 
-  MapPin
+  MapPin,
+  FileSpreadsheet,
+  Sliders,
+  Percent,
+  Calculator,
+  Award
 } from 'lucide-react';
 import { uploadSchoolLogo } from '../../lib/imageStorage';
 
@@ -47,6 +52,9 @@ export const SchoolSettingsView: React.FC = () => {
     currentTerm: school?.currentTerm || 'Term 3',
     currency: school?.currency || 'GHS',
     logo: school?.logo || '',
+    sbaMaxScore: school?.sbaMaxScore ?? 30,
+    examMaxScore: school?.examMaxScore ?? 70,
+    assessmentRatio: school?.assessmentRatio || '30/70',
   });
 
   useEffect(() => {
@@ -66,6 +74,9 @@ export const SchoolSettingsView: React.FC = () => {
         currentTerm: school.currentTerm || 'Term 3',
         currency: school.currency || 'GHS',
         logo: school.logo || '',
+        sbaMaxScore: school.sbaMaxScore ?? 30,
+        examMaxScore: school.examMaxScore ?? 70,
+        assessmentRatio: school.assessmentRatio || '30/70',
       });
     }
   }, [school]);
@@ -400,7 +411,7 @@ export const SchoolSettingsView: React.FC = () => {
               <label className="block text-xs font-bold text-slate-700 mb-1">Current Academic Term</label>
               <select
                 value={formData.currentTerm || 'Term 3'}
-                onChange={e => setFormData({ ...formData, currentTerm: e.target.value })}
+                onChange={e => setFormData({ ...formData, currentTerm: e.target.value as any })}
                 className="w-full px-3 py-2 text-xs font-bold border border-slate-200 bg-slate-50/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
               >
                 <option value="Term 1">Term 1</option>
@@ -419,6 +430,151 @@ export const SchoolSettingsView: React.FC = () => {
                 <option value="GHS">GHS (Ghanaian Cedi - ₵)</option>
                 <option value="USD">USD (US Dollar - $)</option>
               </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Continuous Assessment (SBA) & Exam Scoring Ratio */}
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-teal-700" />
+              <h3 className="text-sm font-bold text-slate-900">Continuous Assessment (SBA) & Examination Model</h3>
+            </div>
+            <span className="text-[11px] font-mono font-bold text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-lg">
+              Active: {formData.sbaMaxScore}/{formData.examMaxScore} Total
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-500">
+            Configure the maximum points allocated to Class Continuous Assessment (SBA) versus Terminal Examination. 
+            All teacher score sheets, grade computations, and GES terminal reports automatically adapt to this ratio.
+          </p>
+
+          {/* Preset Buttons */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
+            {[
+              { id: '30/70', label: '30 / 70', sub: 'GES Standard', sba: 30, exam: 70 },
+              { id: '50/50', label: '50 / 50', sub: 'Equal Weight', sba: 50, exam: 50 },
+              { id: '40/60', label: '40 / 60', sub: 'Continuous Focus', sba: 40, exam: 60 },
+              { id: '30/50', label: '30 / 50', sub: 'Total 80 Marks', sba: 30, exam: 50 },
+              { id: '20/80', label: '20 / 80', sub: 'Exam Heavy', sba: 20, exam: 80 },
+              { id: 'custom', label: 'Custom', sub: 'User Defined', sba: formData.sbaMaxScore, exam: formData.examMaxScore },
+            ].map(preset => {
+              const isSelected = preset.id === 'custom' 
+                ? formData.assessmentRatio === 'custom' || (!['30/70', '50/50', '40/60', '30/50', '20/80'].includes(`${formData.sbaMaxScore}/${formData.examMaxScore}`))
+                : formData.sbaMaxScore === preset.sba && formData.examMaxScore === preset.exam;
+
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => {
+                    if (preset.id !== 'custom') {
+                      setFormData(prev => ({
+                        ...prev,
+                        sbaMaxScore: preset.sba,
+                        examMaxScore: preset.exam,
+                        assessmentRatio: preset.id,
+                      }));
+                    } else {
+                      setFormData(prev => ({
+                        ...prev,
+                        assessmentRatio: 'custom',
+                      }));
+                    }
+                  }}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-teal-50 border-teal-600 ring-2 ring-teal-600/20'
+                      : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div className={`text-xs font-black font-mono ${isSelected ? 'text-teal-900' : 'text-slate-900'}`}>
+                    {preset.label}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">{preset.sub}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Custom / Adjustable Number Inputs */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800">Class Score / SBA Max</label>
+                <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded">Continuous</span>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  required
+                  value={formData.sbaMaxScore}
+                  onChange={e => {
+                    const val = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                    setFormData(prev => ({ ...prev, sbaMaxScore: val, assessmentRatio: 'custom' }));
+                  }}
+                  className="w-full px-3 py-2 text-sm font-mono font-black border border-slate-200 bg-slate-50/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
+                />
+                <span className="absolute right-3 top-2 text-xs text-slate-400 font-medium">marks</span>
+              </div>
+              <p className="text-[10px] text-slate-400">Class tests, projects, homework & quizzes</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800">Terminal Exam Max</label>
+                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">Examination</span>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  required
+                  value={formData.examMaxScore}
+                  onChange={e => {
+                    const val = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                    setFormData(prev => ({ ...prev, examMaxScore: val, assessmentRatio: 'custom' }));
+                  }}
+                  className="w-full px-3 py-2 text-sm font-mono font-black border border-slate-200 bg-slate-50/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
+                />
+                <span className="absolute right-3 top-2 text-xs text-slate-400 font-medium">marks</span>
+              </div>
+              <p className="text-[10px] text-slate-400">End of term exam question paper marks</p>
+            </div>
+
+            <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200 flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700">Combined Maximum</label>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">Auto Calculated</span>
+              </div>
+              <div className="text-2xl font-black font-mono text-slate-900">
+                {(formData.sbaMaxScore || 0) + (formData.examMaxScore || 0)} <span className="text-xs font-normal text-slate-500">marks</span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden flex">
+                <div 
+                  className="bg-teal-600 h-full"
+                  style={{ 
+                    width: `${Math.round(((formData.sbaMaxScore || 0) / Math.max(1, (formData.sbaMaxScore || 0) + (formData.examMaxScore || 0))) * 100)}%` 
+                  }}
+                  title={`SBA: ${formData.sbaMaxScore}`}
+                />
+                <div 
+                  className="bg-blue-600 h-full"
+                  style={{ 
+                    width: `${Math.round(((formData.examMaxScore || 0) / Math.max(1, (formData.sbaMaxScore || 0) + (formData.examMaxScore || 0))) * 100)}%` 
+                  }}
+                  title={`Exam: ${formData.examMaxScore}`}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] font-medium text-slate-500">
+                <span>SBA: {Math.round(((formData.sbaMaxScore || 0) / Math.max(1, (formData.sbaMaxScore || 0) + (formData.examMaxScore || 0))) * 100)}%</span>
+                <span>Exam: {Math.round(((formData.examMaxScore || 0) / Math.max(1, (formData.sbaMaxScore || 0) + (formData.examMaxScore || 0))) * 100)}%</span>
+              </div>
             </div>
           </div>
         </div>

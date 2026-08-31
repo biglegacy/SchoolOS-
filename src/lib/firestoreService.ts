@@ -193,6 +193,15 @@ export function subscribeToFirestore(
     return () => {};
   }
 
+  const handleSyncError = (colName: string, err: any) => {
+    if (err?.code === 'unavailable' || err?.message?.includes('offline') || err?.message?.includes('Could not reach Cloud Firestore')) {
+      // Graceful notice for offline state
+      console.info(`Firestore ${colName} listener is operating with cached data.`);
+    } else {
+      console.warn(`Firestore ${colName} sync notice:`, err?.message || err);
+    }
+  };
+
   const unsubs: Unsubscribe[] = [];
 
   // Schools listener
@@ -200,7 +209,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.SCHOOLS), (snapshot) => {
       const schools = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as School));
       onDataChange({ schools });
-    }, (err) => console.error('Firestore schools sync error:', err))
+    }, (err) => handleSyncError('schools', err))
   );
 
   // Users listener
@@ -208,7 +217,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.USERS), (snapshot) => {
       const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile));
       onDataChange({ users });
-    }, (err) => console.error('Firestore users sync error:', err))
+    }, (err) => handleSyncError('users', err))
   );
 
   // Plans listener
@@ -216,7 +225,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.PLANS), (snapshot) => {
       const plans = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SubscriptionTier));
       onDataChange({ plans });
-    }, (err) => console.error('Firestore plans sync error:', err))
+    }, (err) => handleSyncError('plans', err))
   );
 
   // Students listener
@@ -224,7 +233,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.STUDENTS), (snapshot) => {
       const students = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Student));
       onDataChange({ students });
-    }, (err) => console.error('Firestore students sync error:', err))
+    }, (err) => handleSyncError('students', err))
   );
 
   // Teachers listener
@@ -232,7 +241,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.TEACHERS), (snapshot) => {
       const teachers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Teacher));
       onDataChange({ teachers });
-    }, (err) => console.error('Firestore teachers sync error:', err))
+    }, (err) => handleSyncError('teachers', err))
   );
 
   // Classrooms listener
@@ -240,7 +249,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.CLASSROOMS), (snapshot) => {
       const classrooms = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Classroom));
       onDataChange({ classrooms });
-    }, (err) => console.error('Firestore classrooms sync error:', err))
+    }, (err) => handleSyncError('classrooms', err))
   );
 
   // Subjects listener
@@ -248,7 +257,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.SUBJECTS), (snapshot) => {
       const subjects = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Subject));
       onDataChange({ subjects });
-    }, (err) => console.error('Firestore subjects sync error:', err))
+    }, (err) => handleSyncError('subjects', err))
   );
 
   // Attendance listener
@@ -256,7 +265,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.ATTENDANCE), (snapshot) => {
       const attendance = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord));
       onDataChange({ attendance });
-    }, (err) => console.error('Firestore attendance sync error:', err))
+    }, (err) => handleSyncError('attendance', err))
   );
 
   // Examinations listener
@@ -264,7 +273,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.EXAMINATIONS), (snapshot) => {
       const examinations = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Examination));
       onDataChange({ examinations });
-    }, (err) => console.error('Firestore examinations sync error:', err))
+    }, (err) => handleSyncError('examinations', err))
   );
 
   // Results listener
@@ -272,7 +281,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.RESULTS), (snapshot) => {
       const results = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ExaminationResult));
       onDataChange({ results });
-    }, (err) => console.error('Firestore results sync error:', err))
+    }, (err) => handleSyncError('results', err))
   );
 
   // Fee Structures listener
@@ -280,7 +289,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.FEE_STRUCTURES), (snapshot) => {
       const feeStructures = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeeStructure));
       onDataChange({ feeStructures });
-    }, (err) => console.error('Firestore feeStructures sync error:', err))
+    }, (err) => handleSyncError('feeStructures', err))
   );
 
   // Fee Payments listener
@@ -288,7 +297,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.FEE_PAYMENTS), (snapshot) => {
       const feePayments = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeePayment));
       onDataChange({ feePayments });
-    }, (err) => console.error('Firestore feePayments sync error:', err))
+    }, (err) => handleSyncError('feePayments', err))
   );
 
   // Store Items listener
@@ -296,7 +305,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.STORE_ITEMS), (snapshot) => {
       const storeItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as StoreItem));
       onDataChange({ storeItems });
-    }, (err) => console.error('Firestore storeItems sync error:', err))
+    }, (err) => handleSyncError('storeItems', err))
   );
 
   // POS Transactions listener
@@ -304,7 +313,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.POS_TRANSACTIONS), (snapshot) => {
       const posTransactions = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as POSTransaction));
       onDataChange({ posTransactions });
-    }, (err) => console.error('Firestore posTransactions sync error:', err))
+    }, (err) => handleSyncError('posTransactions', err))
   );
 
   // Messages listener
@@ -312,7 +321,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.MESSAGES), (snapshot) => {
       const messages = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as BroadcastMessage));
       onDataChange({ messages });
-    }, (err) => console.error('Firestore messages sync error:', err))
+    }, (err) => handleSyncError('messages', err))
   );
 
   // Audit Logs listener
@@ -320,7 +329,7 @@ export function subscribeToFirestore(
     onSnapshot(collection(db, COLLECTIONS.AUDIT_LOGS), (snapshot) => {
       const auditLogs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AuditLog));
       onDataChange({ auditLogs });
-    }, (err) => console.error('Firestore auditLogs sync error:', err))
+    }, (err) => handleSyncError('auditLogs', err))
   );
 
   // Platform settings listener
@@ -330,7 +339,7 @@ export function subscribeToFirestore(
       if (commDoc) {
         onDataChange({ platformCommunication: commDoc.data() as PlatformCommunicationSettings });
       }
-    }, (err) => console.error('Firestore platformSettings sync error:', err))
+    }, (err) => handleSyncError('platformSettings', err))
   );
 
   // School settings listener
@@ -341,7 +350,7 @@ export function subscribeToFirestore(
         settingsMap[d.id] = d.data() as SchoolSettings;
       });
       onDataChange({ settings: settingsMap });
-    }, (err) => console.error('Firestore schoolSettings sync error:', err))
+    }, (err) => handleSyncError('schoolSettings', err))
   );
 
   return () => {

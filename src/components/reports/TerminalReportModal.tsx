@@ -52,12 +52,19 @@ export const TerminalReportModal: React.FC<TerminalReportModalProps> = ({
 
   const hasResults = termResults.length > 0;
 
+  // Dynamic SBA and Exam Max Scores from School Settings
+  const sbaMax = school?.sbaMaxScore ?? 30;
+  const examMax = school?.examMaxScore ?? 70;
+  const totalMax = sbaMax + examMax;
+
   // Compute actual aggregates if results exist
   const totalClassScore = termResults.reduce((acc, curr) => acc + (curr.classScore || 0), 0);
   const totalExamScore = termResults.reduce((acc, curr) => acc + (curr.examScore || 0), 0);
   const totalScoreSum = termResults.reduce((acc, curr) => acc + (curr.totalScore || ((curr.classScore || 0) + (curr.examScore || 0))), 0);
-  const maxPossibleMarks = termResults.length * 100;
-  const overallAverage = hasResults ? (totalScoreSum / termResults.length).toFixed(1) : '—';
+  const maxPossibleMarks = termResults.length * totalMax;
+  const overallAverage = hasResults && maxPossibleMarks > 0 
+    ? ((totalScoreSum / maxPossibleMarks) * 100).toFixed(1) 
+    : '—';
   
   // Real Stanine Grade from Average
   const getOverallGrade = (avgStr: string) => {
@@ -344,10 +351,10 @@ export const TerminalReportModal: React.FC<TerminalReportModalProps> = ({
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
                 <BookOpen className="w-3.5 h-3.5 text-teal-700" />
-                <span>Continuous Assessment (SBA 30%) & Terminal Exam (70%) Breakdown</span>
+                <span>Continuous Assessment (SBA {sbaMax}) & Terminal Exam ({examMax}) Breakdown</span>
               </h3>
               <span className="text-[10.5px] font-mono text-slate-500">
-                GES Assessment Ratio: 30% SBA + 70% Terminal Examination
+                School Assessment Ratio: {sbaMax} SBA + {examMax} Examination ({totalMax} Max)
               </span>
             </div>
 
@@ -357,9 +364,9 @@ export const TerminalReportModal: React.FC<TerminalReportModalProps> = ({
                   <thead>
                     <tr className="bg-slate-900 text-white font-bold uppercase text-[10px] tracking-wider">
                       <th className="py-2.5 px-3 border-r border-slate-800">Curriculum Subject</th>
-                      <th className="py-2.5 px-2 text-center border-r border-slate-800 w-20">Class (30%)</th>
-                      <th className="py-2.5 px-2 text-center border-r border-slate-800 w-20">Exam (70%)</th>
-                      <th className="py-2.5 px-2 text-center border-r border-slate-800 w-24 bg-slate-800">Total (100%)</th>
+                      <th className="py-2.5 px-2 text-center border-r border-slate-800 w-20">Class SBA ({sbaMax})</th>
+                      <th className="py-2.5 px-2 text-center border-r border-slate-800 w-20">Exam ({examMax})</th>
+                      <th className="py-2.5 px-2 text-center border-r border-slate-800 w-24 bg-slate-800">Total ({totalMax})</th>
                       <th className="py-2.5 px-2 text-center border-r border-slate-800 w-16">Grade</th>
                       <th className="py-2.5 px-2 text-center border-r border-slate-800 w-16">Pos</th>
                       <th className="py-2.5 px-3">Subject Teacher's Remarks</th>
@@ -368,11 +375,12 @@ export const TerminalReportModal: React.FC<TerminalReportModalProps> = ({
                   <tbody className="divide-y divide-slate-200 font-medium">
                     {termResults.map((item, idx) => {
                       const total = item.totalScore || ((item.classScore || 0) + (item.examScore || 0));
+                      const percent = totalMax > 0 ? (total / totalMax) * 100 : total;
                       let grade = item.grade || '1';
-                      if (total >= 80) grade = '1';
-                      else if (total >= 70) grade = '2';
-                      else if (total >= 60) grade = '3';
-                      else if (total >= 50) grade = '4';
+                      if (percent >= 80) grade = '1';
+                      else if (percent >= 70) grade = '2';
+                      else if (percent >= 60) grade = '3';
+                      else if (percent >= 50) grade = '4';
                       else grade = '5';
 
                       return (

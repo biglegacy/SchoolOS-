@@ -66,20 +66,20 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ onNa
 
   return (
     <div className="space-y-6">
-      {/* Institutional Header Banner - Light Theme SaaS Platform */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden shadow-xs">
+      {/* Institutional Welcome Card - Sky Blue Theme */}
+      <div className="bg-gradient-to-r from-sky-600 via-sky-700 to-blue-700 text-white rounded-2xl p-6 relative overflow-hidden shadow-sm border border-sky-500">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-50 border border-teal-200/80 text-teal-800 text-xs font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-900/60 border border-sky-400/50 text-sky-100 text-xs font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               <span>{school?.currentAcademicYear}</span>
               <span>•</span>
               <span>{school?.currentTerm}</span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              {school?.name}
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              Welcome to {school?.name}
             </h2>
-            <p className="text-xs text-slate-500 italic">
+            <p className="text-xs text-sky-100 italic">
               "{school?.motto || 'Excellence in Education, Discipline and Integrity'}"
             </p>
           </div>
@@ -87,16 +87,16 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ onNa
           <div className="flex items-center gap-3 flex-wrap shrink-0">
             <button
               onClick={() => onNavigate('pos')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer active:scale-[0.98]"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-sky-900 font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer active:scale-[0.98]"
             >
-              <ShoppingCart className="w-3.5 h-3.5" />
+              <ShoppingCart className="w-3.5 h-3.5 text-sky-700" />
               <span>Launch POS Cashier</span>
             </button>
             <button
               onClick={() => onNavigate('attendance')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 font-bold text-xs rounded-xl shadow-2xs transition-all cursor-pointer active:scale-[0.98]"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-sky-800/80 hover:bg-sky-800 text-white border border-sky-400/60 font-bold text-xs rounded-xl shadow-2xs transition-all cursor-pointer active:scale-[0.98]"
             >
-              <CalendarCheck2 className="w-3.5 h-3.5 text-teal-700" />
+              <CalendarCheck2 className="w-3.5 h-3.5 text-sky-200" />
               <span>Daily Roll Call</span>
             </button>
           </div>

@@ -130,13 +130,13 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       
-      {/* 1. PARENT WELCOME & WARD SELECTION BANNER (Teal & White Palette) */}
-      <div className="bg-gradient-to-br from-teal-900 via-teal-800 to-emerald-900 text-white rounded-2xl p-5 sm:p-7 shadow-sm border border-teal-700">
+      {/* 1. PARENT WELCOME & WARD SELECTION BANNER (Sky Blue Theme) */}
+      <div className="bg-gradient-to-r from-sky-600 via-sky-700 to-blue-700 text-white rounded-2xl p-5 sm:p-7 shadow-sm border border-sky-500">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-teal-950/80 border border-teal-600/50 text-teal-200 text-xs font-semibold">
-              <HeartHandshake className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-sky-900/70 border border-sky-400/50 text-sky-100 text-xs font-semibold">
+              <HeartHandshake className="w-3.5 h-3.5 text-sky-200" />
               <span>Parent & Guardian Console</span>
             </div>
             
@@ -144,7 +144,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
               Welcome, {currentUser?.fullName || 'Parent / Guardian'}
             </h1>
             
-            <p className="text-xs text-teal-100/90">
+            <p className="text-xs text-sky-100">
               Monitoring <b className="text-white">{displayChildren.length} Registered Ward{displayChildren.length > 1 ? 's' : ''}</b> at <b className="text-white">{school?.name}</b>
             </p>
           </div>
@@ -152,9 +152,9 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
           {activeChild && (
             <button
               onClick={() => setSelectedReportStudent(activeChild)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-teal-950 hover:bg-teal-50 font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-sky-950 hover:bg-slate-50 font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
             >
-              <FileText className="w-4 h-4 text-teal-700" />
+              <FileText className="w-4 h-4 text-sky-700" />
               <span>Official Terminal Report Card</span>
             </button>
           )}
@@ -162,8 +162,8 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
 
         {/* Multi-Child Selector */}
         {displayChildren.length > 1 && (
-          <div className="flex items-center gap-2 mt-5 pt-4 border-t border-teal-700/60 overflow-x-auto">
-            <span className="text-xs text-teal-200 font-bold uppercase tracking-wider shrink-0 mr-1">
+          <div className="flex items-center gap-2 mt-5 pt-4 border-t border-sky-500/60 overflow-x-auto">
+            <span className="text-xs text-sky-100 font-bold uppercase tracking-wider shrink-0 mr-1">
               Select Ward:
             </span>
             {displayChildren.map((child, idx) => (
@@ -172,8 +172,8 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                 onClick={() => setSelectedChildIndex(idx)}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   selectedChildIndex === idx
-                    ? 'bg-white text-teal-950 shadow-xs'
-                    : 'bg-teal-950/60 text-teal-200 hover:bg-teal-950 hover:text-white'
+                    ? 'bg-white text-sky-950 shadow-xs'
+                    : 'bg-sky-900/60 text-sky-100 hover:bg-sky-900 hover:text-white'
                 }`}
               >
                 {child.firstName} {child.lastName} ({child.classroomName || 'Class'})
@@ -183,7 +183,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
         )}
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-teal-700/60 overflow-x-auto">
+        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-sky-500/60 overflow-x-auto">
           {[
             { id: 'overview', label: 'Ward Overview', icon: Layers },
             { id: 'reports', label: 'Terminal Report Card', icon: FileText },
@@ -206,11 +206,11 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                 }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
                   isActive
-                    ? 'bg-white text-teal-950 shadow-xs'
-                    : 'text-teal-100 hover:text-white hover:bg-teal-950/40'
+                    ? 'bg-white text-sky-950 shadow-xs'
+                    : 'text-sky-100 hover:text-white hover:bg-sky-800/60'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-teal-700' : 'text-teal-300'}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-sky-800' : 'text-sky-200'}`} />
                 <span>{tab.label}</span>
               </button>
             );

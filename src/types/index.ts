@@ -75,6 +75,9 @@ export interface School {
   currentAcademicYear: string;
   currentTerm: 'Term 1' | 'Term 2' | 'Term 3';
   currency?: string; // 'GHS'
+  sbaMaxScore?: number; // Default: 30
+  examMaxScore?: number; // Default: 70
+  assessmentRatio?: '30/70' | '50/50' | '40/60' | '20/80' | '30/50' | 'custom' | string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -530,6 +533,9 @@ export interface SchoolSettings {
   receiptFooter: string;
   reopeningDate: string;
   vacationDate: string;
+  sbaMaxScore?: number;
+  examMaxScore?: number;
+  assessmentRatio?: string;
 }
 
 export interface PlatformCommunicationSettings {

@@ -1,6 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, Firestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
@@ -51,7 +51,23 @@ try {
     app = getApps()[0];
   }
   const dbId = (firebaseConfigJson as any).firestoreDatabaseId || undefined;
-  dbInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+  if (dbId) {
+    try {
+      dbInstance = initializeFirestore(app, {
+        experimentalAutoDetectLongPolling: true,
+      }, dbId);
+    } catch {
+      dbInstance = getFirestore(app, dbId);
+    }
+  } else {
+    try {
+      dbInstance = initializeFirestore(app, {
+        experimentalAutoDetectLongPolling: true,
+      });
+    } catch {
+      dbInstance = getFirestore(app);
+    }
+  }
   authInstance = getAuth(app);
   storageInstance = getStorage(app);
 } catch (err) {

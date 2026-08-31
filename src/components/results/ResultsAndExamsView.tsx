@@ -14,7 +14,7 @@ import {
 import { GhanaFlagBadge } from '../common/EmptyState';
 
 export const ResultsAndExamsView: React.FC = () => {
-  const { classrooms, students, examResults, recordExamResult } = useSchool();
+  const { school, updateSchoolInfo, classrooms, students, examResults, recordExamResult } = useSchool();
   const [selectedClassroomId, setSelectedClassroomId] = useState(classrooms[0]?.id || '');
   const [selectedSubject, setSelectedSubject] = useState('English Language');
   const [selectedTerm, setSelectedTerm] = useState('Term 3');
@@ -22,6 +22,11 @@ export const ResultsAndExamsView: React.FC = () => {
   
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Dynamic SBA and Exam maximums configured by school owner
+  const sbaMax = school?.sbaMaxScore ?? 30;
+  const examMax = school?.examMaxScore ?? 70;
+  const totalMax = sbaMax + examMax;
 
   const activeClassroom = classrooms.find(c => c.id === selectedClassroomId) || classrooms[0];
   const activeSubjects = activeClassroom?.subjects || [
@@ -52,7 +57,7 @@ export const ResultsAndExamsView: React.FC = () => {
   });
 
   const handleClassScoreChange = (studentId: string, val: number) => {
-    const clamped = Math.max(0, Math.min(30, Number(val) || 0));
+    const clamped = Math.max(0, Math.min(sbaMax, Number(val) || 0));
     setScores(prev => ({
       ...prev,
       [studentId]: { ...prev[studentId], classScore: clamped }
@@ -61,7 +66,7 @@ export const ResultsAndExamsView: React.FC = () => {
   };
 
   const handleExamScoreChange = (studentId: string, val: number) => {
-    const clamped = Math.max(0, Math.min(70, Number(val) || 0));
+    const clamped = Math.max(0, Math.min(examMax, Number(val) || 0));
     setScores(prev => ({
       ...prev,
       [studentId]: { ...prev[studentId], examScore: clamped }
@@ -74,7 +79,7 @@ export const ResultsAndExamsView: React.FC = () => {
     // Compute totals and ranks
     const studentTotals = classStudents.map(st => {
       const entry = scores[st.id] || { classScore: 0, examScore: 0 };
-      const total = calculateTotalScore(entry.classScore, entry.examScore);
+      const total = calculateTotalScore(entry.classScore, entry.examScore, sbaMax, examMax);
       return { studentId: st.id, totalScore: total };
     });
 
@@ -82,8 +87,8 @@ export const ResultsAndExamsView: React.FC = () => {
 
     for (const st of classStudents) {
       const entry = scores[st.id] || { classScore: 0, examScore: 0 };
-      const total = calculateTotalScore(entry.classScore, entry.examScore);
-      const grade = getGESGrade(total);
+      const total = calculateTotalScore(entry.classScore, entry.examScore, sbaMax, examMax);
+      const grade = getGESGrade(total, totalMax);
       const pos = positions[st.id] || 1;
 
       await recordExamResult({
@@ -193,14 +198,14 @@ export const ResultsAndExamsView: React.FC = () => {
       </div>
 
       {/* GES Formula Info Pill */}
-      <div className="bg-teal-50 border border-teal-200 rounded-xl p-3.5 flex items-center justify-between gap-3 text-xs text-teal-900 shadow-2xs">
-        <div className="flex items-center gap-2">
+      <div className="bg-teal-50 border border-teal-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-teal-900 shadow-2xs">
+        <div className="flex items-center gap-2 flex-wrap">
           <GhanaFlagBadge size="sm" />
-          <span className="font-bold">Standard GES Continuous Assessment Formula:</span>
-          <span>Class Score (Max 30%) + Exam Score (Max 70%) = Total Score (100%)</span>
+          <span className="font-bold">Active Assessment Scoring Model:</span>
+          <span>Class SBA (Max {sbaMax}) + Exam (Max {examMax}) = Total ({totalMax} Points)</span>
         </div>
-        <span className="text-[10px] bg-teal-200 text-teal-950 font-bold px-2 py-0.5 rounded-full hidden sm:inline-block">
-          Auto Grade Scale Active
+        <span className="text-[10px] bg-teal-200 text-teal-950 font-bold px-2 py-0.5 rounded-full">
+          {sbaMax}/{examMax} Model Active
         </span>
       </div>
 
@@ -222,8 +227,8 @@ export const ResultsAndExamsView: React.FC = () => {
           ) : (
             classStudents.map((student) => {
               const entry = scores[student.id] || { classScore: 0, examScore: 0 };
-              const total = calculateTotalScore(entry.classScore, entry.examScore);
-              const grade = getGESGrade(total);
+              const total = calculateTotalScore(entry.classScore, entry.examScore, sbaMax, examMax);
+              const grade = getGESGrade(total, totalMax);
               const remarks = getGradeRemarks(grade);
 
               return (
@@ -240,7 +245,7 @@ export const ResultsAndExamsView: React.FC = () => {
 
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-black text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg">
-                        {total}%
+                        {total}/{totalMax}
                       </span>
                       <span className={`inline-flex items-center justify-center min-w-7 h-7 px-2 rounded-full text-xs font-black ${
                         grade === 'A' || grade === 'B+' ? 'bg-emerald-100 text-emerald-800' :
@@ -258,12 +263,12 @@ export const ResultsAndExamsView: React.FC = () => {
                   <div className="grid grid-cols-2 gap-3 bg-gray-50/80 p-3 rounded-xl border border-gray-100">
                     <div>
                       <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
-                        Class Score (30%)
+                        Class SBA ({sbaMax})
                       </label>
                       <input
                         type="number"
                         min="0"
-                        max="30"
+                        max={sbaMax}
                         value={entry.classScore}
                         onChange={e => handleClassScoreChange(student.id, Number(e.target.value))}
                         className="w-full px-3 py-2 text-center font-bold text-gray-900 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
@@ -272,12 +277,12 @@ export const ResultsAndExamsView: React.FC = () => {
 
                     <div>
                       <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
-                        Exam Score (70%)
+                        Exam Score ({examMax})
                       </label>
                       <input
                         type="number"
                         min="0"
-                        max="70"
+                        max={examMax}
                         value={entry.examScore}
                         onChange={e => handleExamScoreChange(student.id, Number(e.target.value))}
                         className="w-full px-3 py-2 text-center font-bold text-gray-900 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
@@ -301,9 +306,9 @@ export const ResultsAndExamsView: React.FC = () => {
               <tr>
                 <th className="px-5 py-3">Student Name</th>
                 <th className="px-4 py-3">Admission #</th>
-                <th className="px-4 py-3 text-center">Class Score (30%)</th>
-                <th className="px-4 py-3 text-center">Exam Score (70%)</th>
-                <th className="px-4 py-3 text-center font-bold text-gray-900">Total (100%)</th>
+                <th className="px-4 py-3 text-center">Class SBA ({sbaMax})</th>
+                <th className="px-4 py-3 text-center">Exam ({examMax})</th>
+                <th className="px-4 py-3 text-center font-bold text-gray-900">Total ({totalMax})</th>
                 <th className="px-4 py-3 text-center">Grade</th>
                 <th className="px-5 py-3 text-right">Remarks</th>
               </tr>
@@ -318,8 +323,8 @@ export const ResultsAndExamsView: React.FC = () => {
               ) : (
                 classStudents.map((student, idx) => {
                   const entry = scores[student.id] || { classScore: 0, examScore: 0 };
-                  const total = calculateTotalScore(entry.classScore, entry.examScore);
-                  const grade = getGESGrade(total);
+                  const total = calculateTotalScore(entry.classScore, entry.examScore, sbaMax, examMax);
+                  const grade = getGESGrade(total, totalMax);
                   const remarks = getGradeRemarks(grade);
 
                   return (
@@ -338,7 +343,7 @@ export const ResultsAndExamsView: React.FC = () => {
                         <input
                           type="number"
                           min="0"
-                          max="30"
+                          max={sbaMax}
                           value={entry.classScore}
                           onChange={e => handleClassScoreChange(student.id, Number(e.target.value))}
                           className="w-16 px-2 py-1 text-center font-bold text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
@@ -349,7 +354,7 @@ export const ResultsAndExamsView: React.FC = () => {
                         <input
                           type="number"
                           min="0"
-                          max="70"
+                          max={examMax}
                           value={entry.examScore}
                           onChange={e => handleExamScoreChange(student.id, Number(e.target.value))}
                           className="w-16 px-2 py-1 text-center font-bold text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"

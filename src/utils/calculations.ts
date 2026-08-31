@@ -8,9 +8,13 @@ export interface GradeInfo {
 
 /**
  * Standard Ghana GES / WAEC Grading System for Basic & Secondary Education
+ * Supports normalizing scores when assessment max total is not 100 (e.g. 30/50 = 80 total).
  */
-export const calculateGhanaGrade = (score: number): GradeInfo => {
-  const rounded = Math.round(score);
+export const calculateGhanaGrade = (score: number, maxScore: number = 100): GradeInfo => {
+  const percentage = maxScore && maxScore > 0 && maxScore !== 100 
+    ? (score / maxScore) * 100 
+    : score;
+  const rounded = Math.round(percentage);
   if (rounded >= 80) return { grade: 'A', remark: 'Exemplary', points: 1 };
   if (rounded >= 75) return { grade: 'B+', remark: 'Very Good', points: 2 };
   if (rounded >= 70) return { grade: 'B', remark: 'Good', points: 3 };
@@ -20,8 +24,8 @@ export const calculateGhanaGrade = (score: number): GradeInfo => {
   return { grade: 'F', remark: 'Fail', points: 9 };
 };
 
-export const getGESGrade = (score: number): 'A' | 'B+' | 'B' | 'C' | 'D' | 'E' | 'F' => {
-  return calculateGhanaGrade(score).grade;
+export const getGESGrade = (score: number, maxScore: number = 100): 'A' | 'B+' | 'B' | 'C' | 'D' | 'E' | 'F' => {
+  return calculateGhanaGrade(score, maxScore).grade;
 };
 
 export const getGradeRemarks = (grade: string): string => {
@@ -36,10 +40,32 @@ export const getGradeRemarks = (grade: string): string => {
   }
 };
 
-export const calculateTotalScore = (classScore: number, examScore: number): number => {
-  // Class score is max 30, Exam score is max 70 (Ghana GES standard 30/70 formula)
-  const total = Number(classScore || 0) + Number(examScore || 0);
-  return Math.min(100, Math.max(0, Math.round(total * 10) / 10));
+/**
+ * Calculates total score given class SBA score and Exam score.
+ * Respects school's custom sbaMaxScore (e.g. 30, 50, 40) and examMaxScore (e.g. 70, 50, 60, 50).
+ */
+export const calculateTotalScore = (
+  classScore: number, 
+  examScore: number, 
+  sbaMax: number = 30, 
+  examMax: number = 70
+): number => {
+  const safeClass = Math.max(0, Math.min(sbaMax, Number(classScore || 0)));
+  const safeExam = Math.max(0, Math.min(examMax, Number(examScore || 0)));
+  const total = safeClass + safeExam;
+  const maxTotal = sbaMax + examMax;
+  return Math.min(maxTotal, Math.max(0, Math.round(total * 10) / 10));
+};
+
+export const calculatePercentage = (
+  classScore: number, 
+  examScore: number, 
+  sbaMax: number = 30, 
+  examMax: number = 70
+): number => {
+  const total = calculateTotalScore(classScore, examScore, sbaMax, examMax);
+  const maxTotal = (sbaMax + examMax) || 100;
+  return Math.min(100, Math.max(0, Math.round((total / maxTotal) * 100 * 10) / 10));
 };
 
 /**
