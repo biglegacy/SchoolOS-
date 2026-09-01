@@ -84,7 +84,21 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    match /subscriptionTransactions/{txId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /subscriptions/{subId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     match /platformSettings/{docId} {
+      allow read, write: if true;
+    }
+
+    match /communicationLogs/{logId} {
       allow read, write: if true;
     }
 

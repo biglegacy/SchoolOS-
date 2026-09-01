@@ -18,6 +18,8 @@ import { SuperAdminPlatformReports } from './SuperAdminPlatformReports';
 import { SuperAdminSecurity } from './SuperAdminSecurity';
 import { SuperAdminProfile } from './SuperAdminProfile';
 import { SuperAdminSystemSettings } from './SuperAdminSystemSettings';
+import { SuperAdminCommunicationAPI } from './SuperAdminCommunicationAPI';
+import { SuperAdminPaystackSettings } from './SuperAdminPaystackSettings';
 import { SchoolRegistrationModal } from '../auth/SchoolRegistrationModal';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
@@ -253,11 +255,16 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
         />
       )}
 
-      {/* SUBSCRIPTIONS: BILLING & LEDGER */}
+      {/* SUBSCRIPTIONS: BILLING & PAYSTACK REVENUE */}
       {activeNav === 'sub_billing' && (
-        <SuperAdminBilling
-          schools={allSchools}
-          plans={plans}
+        <SuperAdminPaystackSettings />
+      )}
+
+      {/* COMMUNICATION & SETTINGS: CENTRAL COMMUNICATIONS API */}
+      {(activeNav === 'comm_api' || activeNav === 'settings_comm_api') && (
+        <SuperAdminCommunicationAPI
+          initialSettings={platformCommunication}
+          onSaveCommunication={handleSaveCommunication}
         />
       )}
 
@@ -306,7 +313,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
 
       {/* SYSTEM: SETTINGS */}
       {activeNav === 'system_settings' && (
-        <SuperAdminSystemSettings />
+        <SuperAdminSystemSettings onNavigateToCommAPI={() => setActiveNav('settings_comm_api')} />
       )}
 
       {/* SYSTEM: SECURITY */}

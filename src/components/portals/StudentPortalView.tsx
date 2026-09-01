@@ -87,43 +87,43 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       
-      {/* 1. STUDENT PROFILE WELCOME HEADER (Sky Blue Theme) */}
-      <div className="bg-gradient-to-r from-sky-600 via-sky-700 to-blue-700 text-white rounded-2xl p-6 sm:p-7 border border-sky-500 shadow-sm">
+      {/* 1. STUDENT PROFILE WELCOME HEADER (White Theme) */}
+      <div className="bg-white border border-slate-200 text-slate-900 rounded-2xl p-6 sm:p-7 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             {me.photoUrl ? (
-              <img src={me.photoUrl} alt={me.firstName} className="w-16 h-16 rounded-2xl object-cover border-2 border-sky-300 shadow-sm" />
+              <img src={me.photoUrl} alt={me.firstName} className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-200 shadow-2xs" />
             ) : (
-              <div className="w-16 h-16 rounded-2xl bg-sky-900 text-white flex items-center justify-center font-black text-xl shadow-sm border border-sky-400">
+              <div className="w-16 h-16 rounded-2xl bg-sky-600 text-white flex items-center justify-center font-black text-xl shadow-2xs">
                 {me.firstName[0]}{me.lastName[0]}
               </div>
             )}
             
             <div className="space-y-1">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-sky-900/70 border border-sky-400/50 text-sky-100 text-xs font-semibold">
-                <GraduationCap className="w-3.5 h-3.5 text-sky-200" />
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold">
+                <GraduationCap className="w-3.5 h-3.5 text-sky-600" />
                 <span>Student Learning Console</span>
               </div>
-              <h1 className="text-2xl font-black tracking-tight text-white">
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">
                 {me.firstName} {me.lastName} {me.otherNames || ''}
               </h1>
-              <p className="text-xs text-sky-100">
-                Class: <b className="text-white">{me.classroomName || 'Assigned Class'}</b> • Admission No: <b className="text-sky-200 font-mono">{me.admissionNumber}</b> {me.houseOrTeam && `• House: ${me.houseOrTeam}`}
+              <p className="text-xs text-slate-500">
+                Class: <b className="text-slate-900">{me.classroomName || 'Assigned Class'}</b> • Admission No: <b className="text-sky-600 font-mono">{me.admissionNumber}</b> {me.houseOrTeam && `• House: ${me.houseOrTeam}`}
               </p>
             </div>
           </div>
 
           <button
             onClick={() => setIsReportOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-sky-900 font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
           >
-            <FileText className="w-4 h-4 text-sky-700" />
+            <FileText className="w-4 h-4 text-white" />
             <span>Official Report Card</span>
           </button>
         </div>
 
         {/* Sub-Navigation Tabs */}
-        <div className="flex items-center gap-2 mt-6 pt-4 border-t border-sky-500/50 overflow-x-auto">
+        <div className="flex items-center gap-2 mt-6 pt-4 border-t border-slate-100 overflow-x-auto">
           {[
             { id: 'overview', label: 'My Overview', icon: Layers },
             { id: 'results', label: 'Continuous Assessment & Exams', icon: FileSpreadsheet },
@@ -146,11 +146,11 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
                   isActive
-                    ? 'bg-white text-sky-950 shadow-xs'
-                    : 'text-sky-100 hover:text-white hover:bg-sky-800/60'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-sky-800' : 'text-sky-200'}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-sky-400' : 'text-slate-400'}`} />
                 <span>{tab.label}</span>
               </button>
             );

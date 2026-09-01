@@ -106,8 +106,12 @@ export const AccountantPortalView: React.FC<AccountantPortalViewProps> = ({ onNa
                 <div className="font-bold text-gray-900">
                   {pay.studentName} ({pay.classroomName})
                 </div>
-                <div className="text-[11px] text-gray-400 font-mono">
-                  Receipt: {pay.receiptNumber} • Txn: {pay.transactionReference} • Mode: {pay.paymentMethod.toUpperCase()}
+                <div className="text-[11px] text-gray-500 font-mono flex flex-wrap items-center gap-x-2">
+                  <span className="font-bold text-gray-700">Receipt: {pay.receiptNumber || pay.id}</span>
+                  <span>•</span>
+                  <span className="text-teal-700 font-semibold">Ref: {pay.transactionReference || pay.reference || pay.id}</span>
+                  <span>•</span>
+                  <span>Mode: {(pay.paymentMethod || pay.method || 'MOMO').toUpperCase()}</span>
                 </div>
               </div>
 

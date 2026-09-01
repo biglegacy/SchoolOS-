@@ -22,15 +22,23 @@ import {
   Sliders,
   Percent,
   Calculator,
-  Award
+  Award,
+  X,
+  AlertTriangle,
+  CreditCard,
+  Layers
 } from 'lucide-react';
-import { uploadSchoolLogo } from '../../lib/imageStorage';
+import { uploadSchoolLogo, deleteSchoolLogoFile } from '../../lib/imageStorage';
+import { SchoolSubscriptionPaymentView } from './SchoolSubscriptionPaymentView';
 
 export const SchoolSettingsView: React.FC = () => {
   const { school, updateSchoolInfo } = useSchool();
+  const [activeTab, setActiveTab] = useState<'profile' | 'academic' | 'billing'>('profile');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isRemovingLogo, setIsRemovingLogo] = useState(false);
+  const [showRemoveConfirmModal, setShowRemoveConfirmModal] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -124,12 +132,33 @@ export const SchoolSettingsView: React.FC = () => {
     }
   };
 
-  const handleRemoveLogo = async () => {
+  const handleConfirmRemoveLogo = async () => {
     if (!school) return;
-    if (confirm('Are you sure you want to remove the school logo? The school initials badge will be used instead.')) {
+    setIsRemovingLogo(true);
+    const previousLogo = formData.logo || school.logo;
+
+    try {
+      // 1. Clear local form state
       setFormData(prev => ({ ...prev, logo: '' }));
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      // 2. Authoritatively persist empty logo to context state & Firestore
       await updateSchoolInfo({ logo: '' });
-      showToast('School logo removed successfully.');
+
+      // 3. Clean up storage asset if stored in Firebase Storage
+      if (previousLogo) {
+        await deleteSchoolLogoFile(previousLogo);
+      }
+
+      setShowRemoveConfirmModal(false);
+      showToast('School logo removed successfully. Initials badge is now active.');
+    } catch (err: any) {
+      console.error('Failed to remove school logo:', err);
+      setUploadError('Failed to remove school logo. Please try again.');
+    } finally {
+      setIsRemovingLogo(false);
     }
   };
 
@@ -157,13 +186,13 @@ export const SchoolSettingsView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Institutional Configuration & Branding</h1>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Institutional Configuration &amp; Subscriptions</h1>
             <span className="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 rounded-md text-[10px] font-mono font-bold uppercase">
               {school?.shortCode || 'SCH'} Settings
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Configure school profile, upload institutional crest/logo, set academic sessions, and manage official details.
+            Configure school profile, upload institutional crest/logo, manage academic sessions, and renew termly subscriptions with Paystack.
           </p>
         </div>
 
@@ -174,6 +203,39 @@ export const SchoolSettingsView: React.FC = () => {
         )}
       </div>
 
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('profile')}
+          className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'profile'
+              ? 'border-teal-700 text-teal-900 bg-teal-50/50 rounded-t-lg'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          <span>Institutional Profile &amp; Crest</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('billing')}
+          className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'billing'
+              ? 'border-teal-700 text-teal-900 bg-teal-50/50 rounded-t-lg'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>Paystack Subscription &amp; Billing</span>
+        </button>
+      </div>
+
+      {activeTab === 'billing' ? (
+        <SchoolSubscriptionPaymentView />
+      ) : (
+        <>
       {/* Logo & Branding Card */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -189,8 +251,8 @@ export const SchoolSettingsView: React.FC = () => {
           {formData.logo && (
             <button
               type="button"
-              onClick={handleRemoveLogo}
-              className="text-xs text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1 cursor-pointer"
+              onClick={() => setShowRemoveConfirmModal(true)}
+              className="text-xs text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-lg hover:bg-rose-50 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Remove Logo</span>
@@ -247,7 +309,7 @@ export const SchoolSettingsView: React.FC = () => {
               </div>
             )}
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -265,14 +327,82 @@ export const SchoolSettingsView: React.FC = () => {
               </label>
 
               {formData.logo && (
-                <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
-                  <Check className="w-3 h-3" /> Live Synced to Firestore
-                </span>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowRemoveConfirmModal(true)}
+                    className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl cursor-pointer transition-all flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove Logo</span>
+                  </button>
+
+                  <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Live Synced to Firestore
+                  </span>
+                </>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Remove Logo Confirmation Modal */}
+      {showRemoveConfirmModal && (
+        <div 
+          className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => !isRemovingLogo && setShowRemoveConfirmModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-150 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Remove School Crest?</h3>
+                  <p className="text-xs text-slate-500">This will remove the current institutional logo.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isRemovingLogo && setShowRemoveConfirmModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              Are you sure you want to remove the school logo? The school initials badge (<span className="font-mono font-bold text-teal-800">{formData.shortCode || 'SCH'}</span>) will be displayed on all navigation headers, terminal report cards, and official fee receipts instead.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isRemovingLogo}
+                onClick={() => setShowRemoveConfirmModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={isRemovingLogo}
+                onClick={handleConfirmRemoveLogo}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                {isRemovingLogo ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                <span>{isRemovingLogo ? 'Removing...' : 'Yes, Remove Logo'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Settings Form */}
       <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
@@ -600,6 +730,8 @@ export const SchoolSettingsView: React.FC = () => {
           </button>
         </div>
       </form>
+      </>
+      )}
     </div>
   );
 };

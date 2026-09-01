@@ -29,7 +29,8 @@ export const FeesManagementView: React.FC = () => {
     feePayments, 
     recordFeePayment, 
     getStudentFeeSummaries,
-    sendSMSBroadcast 
+    sendSMSBroadcast,
+    generateTransactionReference 
   } = useSchool();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,7 +45,9 @@ export const FeesManagementView: React.FC = () => {
   // Payment form state
   const [paymentAmount, setPaymentAmount] = useState<number>(1500);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mtn_momo');
-  const [transactionRef, setTransactionRef] = useState(`MOMO/GH/${Math.floor(1000000 + Math.random() * 9000000)}`);
+  const [transactionRef, setTransactionRef] = useState('');
+  const [receiptNumber, setReceiptNumber] = useState('');
+  const [isGeneratingRef, setIsGeneratingRef] = useState(false);
   const [payerName, setPayerName] = useState('');
   const [payerPhone, setPayerPhone] = useState('');
   const [remarks, setRemarks] = useState('Term 3 Fees Part Payment');
@@ -66,13 +69,38 @@ export const FeesManagementView: React.FC = () => {
     return matchesSearch && matchesClass && matchesStatus;
   });
 
-  const handleOpenPayment = (student: Student) => {
+  const handleOpenPayment = async (student: Student) => {
     setSelectedStudentForPay(student);
     const primaryGuardian = student.guardians[0];
     setPayerName(primaryGuardian?.name || `${student.firstName} Guardian`);
     setPayerPhone(primaryGuardian?.phone || '0240000000');
-    setTransactionRef(`MOMO/GH/${Math.floor(1000000 + Math.random() * 9000000)}`);
+    
+    setIsGeneratingRef(true);
     setIsPaymentModalOpen(true);
+    try {
+      if (generateTransactionReference) {
+        const gen = await generateTransactionReference('fee_payment');
+        setTransactionRef(gen.reference);
+        setReceiptNumber(gen.receiptNumber);
+      }
+    } catch (err) {
+      console.warn('Error fetching dynamic reference:', err);
+    } finally {
+      setIsGeneratingRef(false);
+    }
+  };
+
+  const handleRegenerateRef = async () => {
+    setIsGeneratingRef(true);
+    try {
+      if (generateTransactionReference) {
+        const gen = await generateTransactionReference('fee_payment');
+        setTransactionRef(gen.reference);
+        setReceiptNumber(gen.receiptNumber);
+      }
+    } finally {
+      setIsGeneratingRef(false);
+    }
   };
 
   const handleRecordPayment = async (e: React.FormEvent) => {
@@ -88,7 +116,9 @@ export const FeesManagementView: React.FC = () => {
       term: 'Term 3',
       amount: Number(paymentAmount),
       paymentMethod,
-      transactionReference: transactionRef,
+      reference: transactionRef || undefined,
+      transactionReference: transactionRef || undefined,
+      receiptNumber: receiptNumber || undefined,
       paymentDate: new Date().toISOString().split('T')[0],
       recordedBy: 'School Bursar / Accountant',
       payerName,
@@ -418,14 +448,36 @@ export const FeesManagementView: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">Transaction Ref / Cheque No. *</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-gray-700">Dynamic Transaction Reference *</label>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  Dynamic Authoritative ID
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRegenerateRef}
+                  disabled={isGeneratingRef}
+                  className="text-[10px] text-teal-600 hover:text-teal-700 font-bold underline disabled:opacity-50"
+                >
+                  {isGeneratingRef ? 'Generating...' : 'Regenerate ID'}
+                </button>
+              </div>
+            </div>
             <input
               type="text"
               required
               value={transactionRef}
               onChange={e => setTransactionRef(e.target.value)}
-              className="w-full px-3 py-2 text-xs font-mono font-bold border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+              placeholder={isGeneratingRef ? "Generating dynamic reference..." : "e.g. SCH-FEE-20260901-..."}
+              className="w-full px-3 py-2 text-xs font-mono font-bold border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-gray-50 text-gray-800"
             />
+            {receiptNumber && (
+              <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1 font-mono">
+                <span>Receipt Number:</span>
+                <span className="font-bold text-gray-700">{receiptNumber}</span>
+              </p>
+            )}
           </div>
 
           <div>

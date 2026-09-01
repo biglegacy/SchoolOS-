@@ -82,7 +82,7 @@ export const SuperAdminBroadcastSMS: React.FC<SuperAdminBroadcastSMSProps> = ({
 
         <div className="flex items-center gap-2 px-3 py-1.5 bg-teal-50 border border-teal-200 rounded-xl text-teal-900 text-xs font-semibold">
           <Radio className="w-4 h-4 text-teal-700 shrink-0" />
-          <span>Gateway: <b>{communicationSettings?.sms?.provider?.toUpperCase() || 'HUBTEL'}</b></span>
+          <span>Gateway: <b>{communicationSettings?.sms?.provider?.toUpperCase() || 'ARKESEL'}</b></span>
         </div>
       </div>
 
@@ -185,7 +185,7 @@ export const SuperAdminBroadcastSMS: React.FC<SuperAdminBroadcastSMSProps> = ({
               className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
               placeholder="e.g. SCHOOLOS"
             />
-            <p className="text-[10px] text-slate-400">Must be registered with NCA / Hubtel Ghana (Max 11 Alphanumeric characters).</p>
+            <p className="text-[10px] text-slate-400">Must be registered with NCA / Arkesel Ghana (Max 11 Alphanumeric characters).</p>
           </div>
 
           <div className="space-y-1.5">
@@ -237,7 +237,7 @@ export const SuperAdminBroadcastSMS: React.FC<SuperAdminBroadcastSMSProps> = ({
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-2 text-xs text-slate-600">
             <h3 className="font-bold text-slate-900">Broadcast Compliance</h3>
             <p className="text-[11px] leading-relaxed">
-              SMS broadcasts sent through the Super Admin panel are delivered directly via the platform's Hubtel/NCA gateway connection. All transmissions are recorded in the system audit logs.
+              SMS broadcasts sent through the Super Admin panel are delivered directly via the platform's Arkesel/NCA gateway connection. All transmissions are recorded in the system audit logs.
             </p>
           </div>
         </div>

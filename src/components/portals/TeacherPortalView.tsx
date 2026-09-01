@@ -501,36 +501,32 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
     <div id="teacher-portal-view" className="space-y-6 animate-in fade-in duration-200 pb-16">
       
       {/* ========================================================================= */}
-      {/* TEACHER PORTAL HERO HEADER (SKY BLUE WELCOME CARD) */}
+      {/* TEACHER PORTAL HERO HEADER (WHITE WELCOME CARD) */}
       {/* ========================================================================= */}
       <div 
         id="teacher-portal-hero-card"
-        className="bg-gradient-to-r from-sky-400 via-sky-500 to-blue-600 text-white rounded-2xl p-5 sm:p-7 border border-sky-300 shadow-md relative overflow-hidden"
+        className="bg-white text-slate-900 rounded-2xl p-5 sm:p-7 border border-slate-200 shadow-xs relative overflow-hidden"
       >
-        {/* Subtle Decorative Glow Accents */}
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-0 left-1/3 -mb-12 w-48 h-48 bg-sky-200/20 rounded-full blur-2xl pointer-events-none"></div>
-
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           
           {/* Teacher Profile & Info */}
           <div className="space-y-2.5">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs border border-white/40 text-white text-xs font-bold tracking-wide shadow-xs">
-                <GraduationCap className="w-3.5 h-3.5 text-sky-100" />
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold tracking-wide shadow-2xs">
+                <GraduationCap className="w-3.5 h-3.5 text-sky-600" />
                 <span>Subject Teacher Portal</span>
               </span>
 
               {activeTeacher?.assignedClassroomName && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-600/90 border border-emerald-300/60 text-white text-xs font-bold shadow-xs">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold shadow-2xs">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Form Master: {activeTeacher.assignedClassroomName}</span>
                 </span>
               )}
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
                 {activeTeacher ? `${activeTeacher.firstName} ${activeTeacher.lastName}` : currentUser?.fullName || 'Faculty Member'}
               </h1>
               
@@ -540,10 +536,10 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
                   value={selectedTeacherId}
                   onChange={e => setSelectedTeacherId(e.target.value)}
                   aria-label="Switch Active Instructor Profile"
-                  className="bg-blue-800/80 text-white border border-white/40 rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-white cursor-pointer shadow-inner"
+                  className="bg-slate-50 text-slate-800 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer shadow-2xs"
                 >
                   {teachers.map(t => (
-                    <option key={t.id} value={t.id} className="bg-slate-900 text-white">
+                    <option key={t.id} value={t.id} className="bg-white text-slate-900">
                       {t.firstName} {t.lastName} ({t.staffId})
                     </option>
                   ))}
@@ -551,17 +547,17 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
               )}
             </div>
 
-            <div className="text-xs text-sky-100 flex items-center gap-2.5 flex-wrap font-medium">
-              <span className="bg-white/20 px-2.5 py-0.5 rounded-lg border border-white/30 text-white">
-                Staff ID: <b className="font-mono text-white">{activeTeacher?.staffId || 'STAFF-001'}</b>
+            <div className="text-xs text-slate-600 flex items-center gap-2.5 flex-wrap font-medium">
+              <span className="bg-slate-50 px-2.5 py-0.5 rounded-lg border border-slate-200 text-slate-700">
+                Staff ID: <b className="font-mono text-slate-900">{activeTeacher?.staffId || 'STAFF-001'}</b>
               </span>
               <span>•</span>
-              <span className="bg-white/20 px-2.5 py-0.5 rounded-lg border border-white/30 text-white">
-                Teaching: <b className="text-white">{distinctSubjects.length} Subjects</b> across <b className="text-white">{distinctClassrooms.length} Classes</b>
+              <span className="bg-slate-50 px-2.5 py-0.5 rounded-lg border border-slate-200 text-slate-700">
+                Teaching: <b className="text-slate-900">{distinctSubjects.length} Subjects</b> across <b className="text-slate-900">{distinctClassrooms.length} Classes</b>
               </span>
               <span>•</span>
-              <span className="bg-white/20 px-2.5 py-0.5 rounded-lg border border-white/30 text-white">
-                Term: <b className="text-white">{school?.currentAcademicYear || '2026/2027'} ({school?.currentTerm || 'Term 3'})</b>
+              <span className="bg-slate-50 px-2.5 py-0.5 rounded-lg border border-slate-200 text-slate-700">
+                Term: <b className="text-slate-900">{school?.currentAcademicYear || '2026/2027'} ({school?.currentTerm || 'Term 3'})</b>
               </span>
             </div>
           </div>
@@ -571,44 +567,44 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
             <button
               id="hero-nav-assignments-btn"
               onClick={() => setActiveSubTab('assignments')}
-              className={`px-3.5 py-2.5 font-bold text-xs rounded-xl border transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+              className={`px-3.5 py-2.5 font-bold text-xs rounded-xl border transition-all flex items-center gap-2 cursor-pointer shadow-2xs ${
                 activeSubTab === 'assignments'
-                  ? 'bg-white text-blue-900 border-white shadow-md'
-                  : 'bg-white/20 hover:bg-white/30 text-white border-white/40'
+                  ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
               }`}
             >
-              <BookOpen className={`w-4 h-4 ${activeSubTab === 'assignments' ? 'text-blue-700' : 'text-white'}`} />
+              <BookOpen className={`w-4 h-4 ${activeSubTab === 'assignments' ? 'text-white' : 'text-slate-500'}`} />
               <span>My Assignments</span>
             </button>
             <button
               id="hero-nav-attendance-btn"
               onClick={() => setActiveSubTab('attendance')}
-              className={`px-3.5 py-2.5 font-bold text-xs rounded-xl border transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+              className={`px-3.5 py-2.5 font-bold text-xs rounded-xl border transition-all flex items-center gap-2 cursor-pointer shadow-2xs ${
                 activeSubTab === 'attendance'
-                  ? 'bg-white text-blue-900 border-white shadow-md'
-                  : 'bg-blue-700/80 hover:bg-blue-700 text-white border-blue-400'
+                  ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
               }`}
             >
-              <CalendarCheck2 className={`w-4 h-4 ${activeSubTab === 'attendance' ? 'text-blue-700' : 'text-white'}`} />
+              <CalendarCheck2 className={`w-4 h-4 ${activeSubTab === 'attendance' ? 'text-white' : 'text-slate-500'}`} />
               <span>Take Roll Call</span>
             </button>
             <button
               id="hero-nav-results-btn"
               onClick={() => setActiveSubTab('results')}
-              className={`px-3.5 py-2.5 font-bold text-xs rounded-xl border transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+              className={`px-3.5 py-2.5 font-bold text-xs rounded-xl border transition-all flex items-center gap-2 cursor-pointer shadow-2xs ${
                 activeSubTab === 'results'
-                  ? 'bg-blue-950 text-white border-blue-950 shadow-md'
-                  : 'bg-white hover:bg-sky-50 text-blue-900 border-white'
+                  ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
               }`}
             >
-              <FileSpreadsheet className={`w-4 h-4 ${activeSubTab === 'results' ? 'text-sky-400' : 'text-blue-700'}`} />
+              <FileSpreadsheet className={`w-4 h-4 ${activeSubTab === 'results' ? 'text-white' : 'text-slate-500'}`} />
               <span>Enter Marks ({sbaMax}/{examMax})</span>
             </button>
           </div>
         </div>
 
         {/* Navigation Tabs Bar */}
-        <div id="teacher-portal-subnav-bar" className="flex items-center gap-1.5 mt-6 pt-4 border-t border-sky-300/60 overflow-x-auto pb-1 scrollbar-none">
+        <div id="teacher-portal-subnav-bar" className="flex items-center gap-1.5 mt-6 pt-4 border-t border-slate-100 overflow-x-auto pb-1 scrollbar-none">
           {[
             { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
             { id: 'assignments', label: 'My Teaching Load', icon: BookOpen, count: assignments.length },
@@ -628,21 +624,21 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
                 onClick={() => setActiveSubTab(tab.id as any)}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
                   isActive
-                    ? 'bg-white text-blue-900 shadow-md border border-white'
-                    : 'text-white/90 hover:text-white hover:bg-white/20 border border-transparent'
+                    ? 'bg-slate-900 text-white shadow-xs border border-slate-900'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-blue-700' : 'text-white'}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-sky-400' : 'text-slate-400'}`} />
                 <span>{tab.label}</span>
                 {tab.count !== undefined && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                    isActive ? 'bg-blue-100 text-blue-900' : 'bg-white/30 text-white'
+                    isActive ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-600'
                   }`}>
                     {tab.count}
                   </span>
                 )}
                 {tab.badge && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-black bg-amber-300 text-amber-950 shadow-xs animate-pulse">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-black bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs">
                     {tab.badge}
                   </span>
                 )}

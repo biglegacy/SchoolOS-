@@ -25,7 +25,9 @@ import {
   ChevronLeft, 
   ChevronRight,
   Menu,
-  X
+  X,
+  Radio,
+  Key
 } from 'lucide-react';
 
 export type SuperAdminNavId = 
@@ -40,6 +42,7 @@ export type SuperAdminNavId =
   | 'sub_plans'
   | 'sub_subscriptions'
   | 'sub_billing'
+  | 'comm_api'
   | 'comm_sms'
   | 'comm_whatsapp'
   | 'comm_notifications'
@@ -47,6 +50,7 @@ export type SuperAdminNavId =
   | 'platform_audit'
   | 'platform_activity'
   | 'system_settings'
+  | 'settings_comm_api'
   | 'system_security'
   | 'system_profile';
 
@@ -85,13 +89,15 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
       case 'sub_plans': return 'Subscription Plans';
       case 'sub_subscriptions': return 'School Subscriptions';
       case 'sub_billing': return 'Billing & Revenue';
-      case 'comm_sms': return 'SMS Communication';
+      case 'comm_api': return 'Central Communications API';
+      case 'comm_sms': return 'SMS Broadcast Service';
       case 'comm_whatsapp': return 'WhatsApp Business Service';
       case 'comm_notifications': return 'System Notifications';
       case 'platform_reports': return 'Platform Reports & Analytics';
       case 'platform_audit': return 'Audit Logs';
       case 'platform_activity': return 'Platform Activity';
       case 'system_settings': return 'System Settings';
+      case 'settings_comm_api': return 'Communications API Settings';
       case 'system_security': return 'Security & Access';
       case 'system_profile': return 'Administrator Profile';
       default: return 'Super Admin Console';
@@ -139,8 +145,9 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
     {
       groupTitle: 'COMMUNICATION',
       items: [
-        { id: 'comm_sms' as SuperAdminNavId, label: 'SMS', icon: MessageSquare },
-        { id: 'comm_whatsapp' as SuperAdminNavId, label: 'WhatsApp', icon: MessageCircle },
+        { id: 'comm_api' as SuperAdminNavId, label: 'Communications API', icon: Key },
+        { id: 'comm_sms' as SuperAdminNavId, label: 'SMS Broadcast', icon: MessageSquare },
+        { id: 'comm_whatsapp' as SuperAdminNavId, label: 'WhatsApp Broadcast', icon: MessageCircle },
         { id: 'comm_notifications' as SuperAdminNavId, label: 'Notifications', icon: Bell },
       ]
     },
@@ -153,11 +160,12 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
       ]
     },
     {
-      groupTitle: 'SYSTEM',
+      groupTitle: 'SETTINGS & SYSTEM',
       items: [
-        { id: 'system_settings' as SuperAdminNavId, label: 'Settings', icon: Settings },
-        { id: 'system_security' as SuperAdminNavId, label: 'Security', icon: ShieldCheck },
-        { id: 'system_profile' as SuperAdminNavId, label: 'Administrator Profile', icon: User },
+        { id: 'system_settings' as SuperAdminNavId, label: 'System Settings', icon: Settings },
+        { id: 'settings_comm_api' as SuperAdminNavId, label: 'Communications API', icon: Radio },
+        { id: 'system_security' as SuperAdminNavId, label: 'Security & Access', icon: ShieldCheck },
+        { id: 'system_profile' as SuperAdminNavId, label: 'Admin Profile', icon: User },
       ]
     }
   ];

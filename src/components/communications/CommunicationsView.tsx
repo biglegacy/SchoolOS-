@@ -77,7 +77,7 @@ export const CommunicationsView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-gray-900 tracking-tight">Parent SMS & WhatsApp Broadcast Center</h2>
-          <p className="text-xs text-gray-500">Direct mobile messaging to Ghanaian guardians and staff via Ghana SMS gateways (Hubtel / Arkesel / mNotify)</p>
+          <p className="text-xs text-gray-500">Direct mobile messaging to Ghanaian guardians and staff via central Arkesel SMS gateway</p>
         </div>
 
         <div className="flex items-center gap-2">

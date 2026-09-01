@@ -84,6 +84,53 @@
         "term": { "type": "string", "maxLength": 20 }
       },
       "required": ["id", "schoolId", "name", "level"]
+    },
+    "SubscriptionTier": {
+      "title": "SubscriptionTier",
+      "description": "Platform subscription tier configured by Super Admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "code": { "type": "string", "maxLength": 50 },
+        "priceGHS": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "billingPeriod": { "type": "string", "enum": ["term", "year", "month"] },
+        "description": { "type": "string", "maxLength": 500 },
+        "studentLimit": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "displayOrder": { "type": "number" },
+        "features": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["id", "name", "code", "priceGHS", "billingPeriod", "isActive"]
+    },
+    "SubscriptionTransaction": {
+      "title": "SubscriptionTransaction",
+      "description": "Real Paystack subscription transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "schoolId": { "type": "string", "maxLength": 128 },
+        "schoolName": { "type": "string", "maxLength": 200 },
+        "schoolCode": { "type": "string", "maxLength": 50 },
+        "planId": { "type": "string", "maxLength": 128 },
+        "tierName": { "type": "string", "maxLength": 100 },
+        "academicYear": { "type": "string", "maxLength": 50 },
+        "term": { "type": "string", "maxLength": 50 },
+        "amountGHS": { "type": "number" },
+        "amountPesewas": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "reference": { "type": "string", "maxLength": 128 },
+        "paystackReference": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending", "success", "failed"] },
+        "paymentChannel": { "type": "string", "maxLength": 50 },
+        "paidAt": { "type": "string" },
+        "customerEmail": { "type": "string", "maxLength": 150 },
+        "customerPhone": { "type": "string", "maxLength": 50 },
+        "receiptNumber": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "schoolId", "planId", "amountGHS", "reference", "status"]
     }
   },
   "firestore": {
@@ -106,6 +153,14 @@
     "/classrooms/{classroomId}": {
       "schema": { "$ref": "#/entities/Classroom" },
       "description": "School classrooms and streams"
+    },
+    "/plans/{planId}": {
+      "schema": { "$ref": "#/entities/SubscriptionTier" },
+      "description": "Platform subscription tiers"
+    },
+    "/subscriptionTransactions/{txId}": {
+      "schema": { "$ref": "#/entities/SubscriptionTransaction" },
+      "description": "Institutional Paystack subscription transaction history"
     }
   }
 }

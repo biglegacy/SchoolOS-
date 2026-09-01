@@ -60,6 +60,7 @@ export interface School {
   district: string;
   region: string; // Greater Accra, Ashanti, Central, Eastern, Western, etc.
   phone: string;
+  registeredPhone?: string; // Official school registered phone number for communication identity
   email: string;
   website?: string;
   registrationNumber?: string;
@@ -78,6 +79,12 @@ export interface School {
   sbaMaxScore?: number; // Default: 30
   examMaxScore?: number; // Default: 70
   assessmentRatio?: '30/70' | '50/50' | '40/60' | '20/80' | '30/50' | 'custom' | string;
+  // School Communication Identity
+  communicationSenderName?: string;
+  communicationSenderNumber?: string;
+  communicationSenderType?: 'sms' | 'whatsapp' | 'both';
+  communicationEnabled?: boolean;
+  approvedSenderId?: string; // Provider-approved alphanumeric sender ID (max 11 chars)
   createdAt?: string;
   updatedAt?: string;
 }
@@ -455,6 +462,8 @@ export interface POSReceipt {
 export interface POSTransaction {
   id: string;
   schoolId: string;
+  reference?: string;
+  transactionReference?: string;
   receiptNumber: string;
   items: Array<{
     itemId: string;
@@ -509,6 +518,7 @@ export interface AuditLog {
   schoolId?: string;
   schoolName?: string;
   userId: string;
+  userName?: string;
   userEmail: string;
   userRole: UserRole;
   action: string;
@@ -519,7 +529,7 @@ export interface AuditLog {
 
 export interface SchoolSettings {
   schoolId: string;
-  smsProvider: 'hubtel' | 'arkesel' | 'twilio';
+  smsProvider: 'arkesel' | 'twilio' | 'mnotify';
   smsSenderId: string;
   smsBalance: number;
   momoMerchantNumber?: string;
@@ -538,14 +548,48 @@ export interface SchoolSettings {
   assessmentRatio?: string;
 }
 
+export type CommunicationCategory = 
+  | 'fee_receipt' 
+  | 'fee_reminder' 
+  | 'attendance_alert' 
+  | 'exam_results' 
+  | 'broadcast' 
+  | 'announcement'
+  | 'test' 
+  | 'notice';
+
+export interface CommunicationProviderConfig {
+  id: string;
+  type: 'sms' | 'whatsapp' | 'email';
+  provider: string; // e.g. 'arkesel', 'mnotify', 'meta', 'twilio', 'infobip'
+  name: string; // Display name e.g. "Arkesel SMS Gateway", "Meta Cloud WhatsApp API"
+  apiKey: string;
+  apiSecret?: string;
+  apiUrl: string;
+  senderId?: string; // Default platform fallback sender ID e.g. "SCHOOLOS"
+  phoneNumberId?: string; // WhatsApp Phone Number ID
+  businessAccountId?: string; // WABA ID
+  webhookSecret?: string;
+  isActive: boolean;
+  isPrimary?: boolean;
+  lastTestedAt?: string;
+  lastTestStatus?: 'success' | 'failed' | 'untested';
+  lastTestMessage?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface PlatformCommunicationSettings {
   sms: {
-    provider: 'hubtel' | 'arkesel' | 'twilio' | 'mnotify' | string;
+    provider: 'arkesel' | 'twilio' | 'mnotify' | string;
     apiKey: string;
     apiSecret?: string;
     senderId: string;
     apiUrl: string;
     isActive: boolean;
+    lastTestedAt?: string;
+    lastTestStatus?: 'success' | 'failed' | 'untested';
+    lastTestMessage?: string;
   };
   whatsapp: {
     provider: 'meta' | 'twilio' | 'infobip' | string;
@@ -555,6 +599,220 @@ export interface PlatformCommunicationSettings {
     businessAccountId?: string;
     apiUrl: string;
     isActive: boolean;
+    lastTestedAt?: string;
+    lastTestStatus?: 'success' | 'failed' | 'untested';
+    lastTestMessage?: string;
   };
+  providers?: CommunicationProviderConfig[];
+  automatedTriggers?: {
+    feePaymentReceipts: boolean;
+    attendanceAbsenceAlerts: boolean;
+    examResultsPublication: boolean;
+    generalAnnouncements: boolean;
+  };
+  updatedAt?: string;
 }
+
+export interface CommunicationLog {
+  id: string;
+  schoolId: string;
+  schoolName: string; // Authoritative registered school name
+  type: 'sms' | 'whatsapp' | 'email' | 'system';
+  recipient: string; // e.g. "0244123456"
+  recipientName?: string; // e.g. "Mr. Kwame Mensah"
+  senderName: string; // Registered school name
+  senderIdentity: string; // School's registered phone or approved sender ID
+  provider: string; // e.g. "Arkesel SMS Gateway", "Meta Cloud API"
+  status: 'delivered' | 'sent' | 'failed' | 'pending';
+  message: string;
+  category: CommunicationCategory;
+  relatedRecordId?: string; // e.g. paymentId, attendanceId, examId
+  providerResponse?: string;
+  costGHS?: number;
+  timestamp: string;
+}
+
+export interface SendCommunicationParams {
+  schoolId: string;
+  schoolName?: string;
+  registeredPhone?: string;
+  type: 'sms' | 'whatsapp';
+  recipient: string;
+  recipientName?: string;
+  message: string;
+  category: CommunicationCategory;
+  relatedRecordId?: string;
+  targetClassroomId?: string;
+}
+
+export interface CommunicationTestParams {
+  channel: 'sms' | 'whatsapp';
+  provider: string;
+  apiKey: string;
+  apiSecret?: string;
+  apiUrl: string;
+  senderId?: string;
+  phoneNumberId?: string;
+  businessAccountId?: string;
+  testRecipient: string;
+  testMessage?: string;
+  simulatedSchoolName?: string;
+}
+
+// ----------------------------------------------------
+// PAYSTACK & SUBSCRIPTION TYPES
+// ----------------------------------------------------
+
+export type SubscriptionPaymentStatus = 'pending' | 'success' | 'failed' | 'abandoned';
+export type SubscriptionSchoolStatus = 'active' | 'grace_period' | 'expired' | 'pending_payment';
+
+export interface PaystackPlatformConfig {
+  secretKey: string;
+  publicKey: string;
+  webhookSecret?: string;
+  currency: string; // Default: 'GHS'
+  isLive: boolean; // false = test mode, true = live mode
+  isActive: boolean;
+  lastTestedAt?: string;
+  lastTestStatus?: 'success' | 'failed' | 'untested';
+  lastTestMessage?: string;
+  updatedAt?: string;
+}
+
+export interface SubscriptionTransaction {
+  id: string;
+  schoolId: string;
+  schoolName: string;
+  schoolCode?: string;
+  planId: string;
+  tierName: string; // 'BASIC' | 'STANDARD' | 'PREMIUM' | string
+  academicYear: string; // e.g. '2025/2026'
+  term: string; // e.g. 'Term 2'
+  amountGHS: number;
+  amountPesewas: number; // amount in pesewas (amountGHS * 100)
+  currency: string; // 'GHS'
+  reference: string; // SchoolOS unique transaction reference e.g. 'SCH-SUB-17251829-ABCD'
+  paystackReference?: string;
+  paystackAuthorizationUrl?: string;
+  status: SubscriptionPaymentStatus;
+  paymentChannel?: 'mobile_money' | 'card' | 'bank' | 'qr' | 'ussd' | string;
+  channelDetails?: {
+    cardType?: string;
+    last4?: string;
+    bank?: string;
+    mobileNetwork?: string; // MTN, Vodafone, AirtelTigo
+    customerPhone?: string;
+  };
+  customerEmail: string;
+  customerPhone?: string;
+  customerName?: string;
+  receiptNumber: string; // e.g. 'REC-2026-SUB-1042'
+  paidAt?: string;
+  gatewayResponse?: string;
+  smsReceiptSent?: boolean;
+  smsReceiptLogId?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PaystackInitializeParams {
+  schoolId: string;
+  planId?: string;
+  tierCode?: string;
+  academicYear?: string;
+  term?: string;
+  email: string;
+  phone?: string;
+  schoolName?: string;
+  callbackUrl?: string;
+}
+
+export interface PaystackInitializeResponse {
+  success: boolean;
+  authorizationUrl?: string;
+  accessCode?: string;
+  reference: string;
+  amountGHS: number;
+  amountPesewas: number;
+  tierName: string;
+  message?: string;
+  error?: string;
+}
+
+export interface PaystackVerifyResponse {
+  success: boolean;
+  status: SubscriptionPaymentStatus;
+  reference: string;
+  amountGHS: number;
+  currency: string;
+  paidAt?: string;
+  paymentChannel?: string;
+  receiptNumber?: string;
+  tierName?: string;
+  schoolId?: string;
+  transaction?: SubscriptionTransaction;
+  message?: string;
+  error?: string;
+}
+
+export interface SubscriptionReminderResult {
+  totalProcessed: number;
+  remindersSent: number;
+  schoolsNotified: Array<{
+    schoolId: string;
+    schoolName: string;
+    recipientPhone: string;
+    planName: string;
+    amountGHS: number;
+    daysRemaining: number;
+    status: string;
+  }>;
+}
+
+export type TransactionType = 'subscription' | 'fee_payment' | 'pos_sale' | 'general';
+
+export interface DynamicReferenceRequest {
+  type: TransactionType;
+  schoolId?: string;
+  prefix?: string;
+}
+
+export interface DynamicReferenceResponse {
+  success: boolean;
+  reference: string;
+  receiptNumber: string;
+  timestamp: string;
+  type: TransactionType;
+}
+
+export interface PaystackFeeInitializeParams {
+  schoolId: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber?: string;
+  classroomId?: string;
+  classroomName?: string;
+  amountGHS: number;
+  payerEmail: string;
+  payerPhone?: string;
+  payerName?: string;
+  academicYear?: string;
+  term?: string;
+  callbackUrl?: string;
+}
+
+export interface PaystackFeeInitializeResponse {
+  success: boolean;
+  authorizationUrl?: string;
+  accessCode?: string;
+  reference: string;
+  receiptNumber: string;
+  amountGHS: number;
+  amountPesewas: number;
+  message?: string;
+  error?: string;
+}
+
+
+
 

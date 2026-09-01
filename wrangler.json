@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "schoolos",
-  "compatibility_date": "2025-02-14",
+  "compatibility_date": "2026-08-31",
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"

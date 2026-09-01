@@ -23,12 +23,30 @@ import {
   FeatureKey,
   UserProfile,
   SMSBroadcastRecipient,
-  PlatformCommunicationSettings
+  PlatformCommunicationSettings,
+  CommunicationLog,
+  SendCommunicationParams,
+  SubscriptionTransaction,
+  PaystackPlatformConfig,
+  PaystackInitializeParams,
+  PaystackInitializeResponse,
+  PaystackVerifyResponse,
+  SubscriptionReminderResult,
+  DynamicReferenceResponse,
+  PaystackFeeInitializeParams,
+  PaystackFeeInitializeResponse,
+  TransactionType
 } from '../types';
 import { loadInitialDatabase, saveDatabase, DatabaseState, resetDatabaseToSeed } from '../lib/storageService';
-import { checkFeatureAccess, INITIAL_PLANS, INITIAL_PLATFORM_COMMUNICATION } from '../lib/mockData';
+import { checkFeatureAccess, INITIAL_PLANS, INITIAL_PLATFORM_COMMUNICATION, INITIAL_PAYSTACK_CONFIG, INITIAL_SUBSCRIPTION_TRANSACTIONS } from '../lib/mockData';
 import { useAuth } from './AuthContext';
 import { calculateGhanaGrade, calculatePositions, generateTeacherRemark, generateHeadTeacherRemark } from '../utils/calculations';
+import {
+  sendCentralCommunication,
+  triggerFeePaymentNotification,
+  triggerAttendanceAbsenceAlert,
+  triggerExamResultAlert
+} from '../lib/communicationService';
 import {
   subscribeToFirestore,
   fsUpdateSchool,
@@ -54,11 +72,24 @@ import {
   fsRecordPOSTransaction,
   fsSendBroadcastMessage,
   fsAddAuditLog,
+  fsAddCommunicationLog,
+  fsDeleteCommunicationLog,
   fsCreatePlan,
   fsUpdatePlan,
   fsDeletePlan,
   fsUpdatePlatformCommunication,
-  fsUpdateSchoolSettings
+  fsUpdateSchoolSettings,
+  fsRecordSubscriptionTransaction,
+  fsUpdateSubscriptionTransaction,
+  fsSavePaystackConfig,
+  fsRenewSchoolSubscription,
+  apiInitializePaystackTransaction,
+  apiVerifyPaystackTransaction,
+  apiSavePaystackConfig,
+  apiTestPaystackConnection,
+  apiTriggerSubscriptionReminders,
+  apiGenerateDynamicReference,
+  apiInitializePaystackFeeTransaction
 } from '../lib/firestoreService';
 
 interface SchoolContextType {
@@ -83,6 +114,10 @@ interface SchoolContextType {
   posSales: POSTransaction[];
   messages: BroadcastMessage[];
   auditLogs: AuditLog[];
+  communicationLogs: CommunicationLog[];
+  allCommunicationLogs: CommunicationLog[];
+  subscriptionTransactions: SubscriptionTransaction[];
+  allSubscriptionTransactions: SubscriptionTransaction[];
   settings: SchoolSettings;
   schoolUsers: UserProfile[];
   allUsers: UserProfile[];
@@ -109,7 +144,7 @@ interface SchoolContextType {
 
   // Attendance Actions
   markAttendance: (records: Array<{ studentId: string; studentName: string; admissionNumber: string; status: AttendanceStatus; remarks?: string }>, classroomId: string, date: string) => Promise<void>;
-  markAttendanceBulk: (records: Array<{ studentId: string; studentName: string; classroomId: string; date: string; academicYear?: string; term?: string; status: AttendanceStatus; remarks?: string }>) => Promise<void>;
+  markAttendanceBulk: (records: Array<{ studentId: string; studentName: string; classroomId: string; date: string; academicYear?: string; term?: string; status: AttendanceStatus; remarks?: string }>, notifyAbsentGuardians?: boolean) => Promise<void>;
   getAttendanceForDate: (classroomId: string, date: string) => AttendanceRecord[];
 
   // Examination & Results Actions
@@ -124,7 +159,7 @@ interface SchoolContextType {
 
   // Fee Management Actions
   addFeeStructure: (structure: Omit<FeeStructure, 'id' | 'schoolId' | 'createdAt'>) => Promise<FeeStructure>;
-  recordFeePayment: (payment: Omit<FeePayment, 'id' | 'schoolId' | 'createdAt'>) => Promise<FeePayment>;
+  recordFeePayment: (payment: Omit<FeePayment, 'id' | 'schoolId' | 'createdAt'>, sendReceiptSMS?: boolean) => Promise<FeePayment>;
   getStudentFeeSummaries: () => StudentFeeSummary[];
 
   // Store & POS Actions
@@ -137,6 +172,7 @@ interface SchoolContextType {
   // Broadcast & Communications Actions
   sendBroadcastMessage: (msg: Omit<BroadcastMessage, 'id' | 'schoolId' | 'costGHS' | 'status' | 'sentAt'>) => Promise<BroadcastMessage>;
   sendSMSBroadcast: (recipientGroup: any, message: string, recipientCount?: number) => Promise<BroadcastMessage>;
+  sendDirectCommunication: (params: Omit<SendCommunicationParams, 'schoolId' | 'schoolName'>) => Promise<CommunicationLog>;
 
   // Super Admin Platform Actions
   approveSchool: (schoolId: string) => Promise<void>;
@@ -149,6 +185,17 @@ interface SchoolContextType {
   deletePlan: (id: string) => Promise<void>;
   setSchoolFeatureOverride: (schoolId: string, feature: FeatureKey, enabled: boolean | null) => Promise<void>;
   assignSchoolPlan: (schoolId: string, planId: string, planCode: string, expiryDate?: string) => Promise<void>;
+
+  // Paystack & Subscription Payments
+  platformPaystack: PaystackPlatformConfig;
+  updatePlatformPaystack: (settings: Partial<PaystackPlatformConfig>) => Promise<void>;
+  testPaystackGateway: (secretKey?: string) => Promise<{ success: boolean; message: string }>;
+  initializeSchoolSubscription: (params: { planId?: string; tierCode?: string; academicYear?: string; term?: string; email: string; phone?: string; callbackUrl?: string }) => Promise<PaystackInitializeResponse>;
+  verifySchoolSubscription: (reference: string) => Promise<PaystackVerifyResponse>;
+  recordSubscriptionPayment: (tx: SubscriptionTransaction) => Promise<void>;
+  triggerTermRenewalReminders: (academicYear?: string, term?: string) => Promise<SubscriptionReminderResult>;
+  generateTransactionReference: (type?: TransactionType, schoolId?: string, prefix?: string) => Promise<DynamicReferenceResponse>;
+  initializeStudentFeePayment: (params: PaystackFeeInitializeParams) => Promise<PaystackFeeInitializeResponse>;
 
   // User Accounts Management
   createUserAccount: (userData: Omit<UserProfile, 'id' | 'uid' | 'createdAt'>, initialPassword?: string) => Promise<UserProfile>;
@@ -236,7 +283,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const defaultSettings: SchoolSettings = {
     schoolId: activeSchoolId,
-    smsProvider: 'hubtel',
+    smsProvider: 'arkesel',
     smsSenderId: school?.shortCode || 'SCHOOLOS',
     smsBalance: 850,
     gradingScale: [
@@ -658,18 +705,36 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return newStructure;
   };
 
-  const recordFeePayment = async (paymentData: Omit<FeePayment, 'id' | 'schoolId' | 'createdAt'>): Promise<FeePayment> => {
-    const newId = `pay_${Date.now()}`;
+  const recordFeePayment = async (paymentData: Omit<FeePayment, 'id' | 'schoolId' | 'createdAt'>, sendReceiptSMS: boolean = true): Promise<FeePayment> => {
+    // Dynamic collision-resistant reference and receipt generation
+    let dynamicRef: DynamicReferenceResponse | null = null;
+    const existingRef = (paymentData as any).reference || paymentData.transactionReference;
+    
+    if (!existingRef || existingRef.startsWith('TX-') || existingRef.startsWith('PAY-TEMP-')) {
+      try {
+        dynamicRef = await apiGenerateDynamicReference('fee_payment', activeSchoolId);
+      } catch (e) {
+        console.warn('Fallback reference generator used for fee payment:', e);
+      }
+    }
+
+    const finalReference = dynamicRef?.reference || existingRef || `SCH-FEE-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const finalReceiptNumber = paymentData.receiptNumber || dynamicRef?.receiptNumber || `REC-FEE-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${finalReference.slice(-4)}`;
+    const newId = `pay_${finalReference}`;
+
     const newPayment: FeePayment = {
       ...paymentData,
       id: newId,
       schoolId: activeSchoolId,
+      reference: finalReference,
+      transactionReference: finalReference,
+      receiptNumber: finalReceiptNumber,
       createdAt: new Date().toISOString(),
     };
 
     updateStateAndPersist(prev => {
       const mode = (newPayment.paymentMethod || newPayment.method || 'momo').toUpperCase();
-      const log = logAction('RECORD_PAYMENT', `Received GH₵ ${newPayment.amount} via ${mode} from ${newPayment.payerName} for student ${newPayment.studentName} (${newPayment.admissionNumber || ''}). Ref: ${newPayment.transactionReference || newPayment.reference || ''}`);
+      const log = logAction('RECORD_PAYMENT', `Received GH₵ ${newPayment.amount} via ${mode} from ${newPayment.payerName} for student ${newPayment.studentName} (${newPayment.admissionNumber || ''}). Ref: ${finalReference}, Receipt: ${finalReceiptNumber}`);
       return {
         ...prev,
         feePayments: [newPayment, ...prev.feePayments],
@@ -678,6 +743,39 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     await fsRecordFeePayment(newPayment);
+
+    // Auto-trigger central SMS receipt if payer phone or student guardian phone exists
+    if (sendReceiptSMS && school) {
+      try {
+        const student = students.find(s => s.id === newPayment.studentId);
+        const payerPhone = newPayment.payerPhone || student?.guardianPhone;
+        if (payerPhone) {
+          const commLog = await triggerFeePaymentNotification(
+            school,
+            {
+              id: newPayment.id,
+              studentName: newPayment.studentName,
+              amount: newPayment.amount,
+              payerName: newPayment.payerName,
+              payerPhone,
+              receiptNumber: finalReceiptNumber,
+              term: newPayment.term || school.currentTerm,
+              paymentMethod: newPayment.paymentMethod
+            },
+            dbState.platformCommunication || INITIAL_PLATFORM_COMMUNICATION
+          );
+          if (commLog) {
+            updateStateAndPersist(prev => ({
+              ...prev,
+              communicationLogs: [commLog, ...(prev.communicationLogs || [])]
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('Could not dispatch automated fee receipt SMS:', err);
+      }
+    }
+
     return newPayment;
   };
 
@@ -753,13 +851,23 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const processPOSTransaction = async (txData: Omit<POSTransaction, 'id' | 'schoolId' | 'receiptNumber' | 'createdAt'>): Promise<POSTransaction> => {
-    const txId = `pos_tx_${Date.now()}`;
-    const receiptNumber = `POS-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    let dynamicRef: DynamicReferenceResponse | null = null;
+    try {
+      dynamicRef = await apiGenerateDynamicReference('pos_sale', activeSchoolId);
+    } catch (err) {
+      console.warn('POS Dynamic Reference generation fallback:', err);
+    }
+
+    const reference = dynamicRef?.reference || (txData as any).reference || `POS-SALE-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const receiptNumber = dynamicRef?.receiptNumber || (txData as any).receiptNumber || `REC-POS-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${reference.slice(-4)}`;
+    const txId = `pos_${reference}`;
 
     const newTx: POSTransaction = {
       ...txData,
       id: txId,
       schoolId: activeSchoolId,
+      reference,
+      transactionReference: reference,
       receiptNumber,
       createdAt: new Date().toISOString(),
     };
@@ -774,7 +882,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return item;
       });
 
-      const log = logAction('POS_CHECKOUT', `Processed POS sale ${receiptNumber} for GH₵ ${newTx.total} (${newTx.paymentMethod.toUpperCase()}) by ${newTx.cashierName}`);
+      const log = logAction('POS_CHECKOUT', `Processed POS sale ${receiptNumber} (Ref: ${reference}) for GH₵ ${newTx.total} (${newTx.paymentMethod.toUpperCase()}) by ${newTx.cashierName}`);
 
       return {
         ...prev,
@@ -1132,8 +1240,34 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const schoolUsers = dbState.users.filter(u => u.schoolId === activeSchoolId);
   const allUsersList = dbState.users;
 
+  const sendDirectCommunication = async (params: Omit<SendCommunicationParams, 'schoolId' | 'schoolName'>): Promise<CommunicationLog> => {
+    if (!school) {
+      throw new Error('No active school selected for communication transmission.');
+    }
+    const log = await sendCentralCommunication(
+      {
+        ...params,
+        schoolId: school.id,
+        schoolName: school.name,
+        registeredPhone: school.registeredPhone || school.phone
+      },
+      school,
+      dbState.platformCommunication || INITIAL_PLATFORM_COMMUNICATION
+    );
+
+    updateStateAndPersist(prev => ({
+      ...prev,
+      communicationLogs: [log, ...(prev.communicationLogs || [])]
+    }));
+
+    return log;
+  };
+
   // Convenience aliases and adapters
-  const markAttendanceBulk = async (records: Array<{ studentId: string; studentName: string; classroomId: string; date: string; academicYear?: string; term?: string; status: AttendanceStatus; remarks?: string }>) => {
+  const markAttendanceBulk = async (
+    records: Array<{ studentId: string; studentName: string; classroomId: string; date: string; academicYear?: string; term?: string; status: AttendanceStatus; remarks?: string }>,
+    notifyAbsentGuardians: boolean = false
+  ) => {
     if (records.length === 0) return;
     const classroomId = records[0].classroomId;
     const date = records[0].date;
@@ -1148,6 +1282,40 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
     });
     await markAttendance(formatted, classroomId, date);
+
+    // Auto-alert absent students' guardians if requested or triggered
+    if (notifyAbsentGuardians && school) {
+      const classroomObj = classrooms.find(c => c.id === classroomId);
+      const absentRecords = records.filter(r => r.status === 'absent');
+      for (const rec of absentRecords) {
+        const stu = students.find(s => s.id === rec.studentId);
+        if (stu && stu.guardianPhone) {
+          try {
+            const log = await triggerAttendanceAbsenceAlert(
+              school,
+              {
+                id: stu.id,
+                firstName: stu.firstName,
+                lastName: stu.lastName,
+                classroomName: classroomObj?.name || 'Classroom',
+                guardianPhone: stu.guardianPhone,
+                guardianName: stu.guardianName
+              },
+              date,
+              dbState.platformCommunication || INITIAL_PLATFORM_COMMUNICATION
+            );
+            if (log) {
+              updateStateAndPersist(prev => ({
+                ...prev,
+                communicationLogs: [log, ...(prev.communicationLogs || [])]
+              }));
+            }
+          } catch (e) {
+            console.warn('Failed to send absence alert SMS:', e);
+          }
+        }
+      }
+    }
   };
 
   const recordExamResult = async (resultData: any) => {
@@ -1244,6 +1412,226 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setDbState(fresh);
   };
 
+  // Paystack & Subscription Management
+  const updatePlatformPaystack = async (settings: Partial<PaystackPlatformConfig>): Promise<void> => {
+    const updated: PaystackPlatformConfig = {
+      ...(dbState.platformPaystack || INITIAL_PAYSTACK_CONFIG),
+      ...settings,
+      updatedAt: new Date().toISOString()
+    };
+
+    setDbState(prev => ({
+      ...prev,
+      platformPaystack: updated
+    }));
+
+    await fsSavePaystackConfig(updated);
+    try {
+      await apiSavePaystackConfig(updated);
+    } catch (e) {
+      console.warn('API save paystack notice:', e);
+    }
+
+    await fsAddAuditLog({
+      id: `audit-${Date.now()}`,
+      schoolId: 'platform-wide',
+      schoolName: 'Platform Super Admin',
+      userId: currentUser?.id || 'super-admin',
+      userName: currentUser?.fullName || 'Super Administrator',
+      userEmail: currentUser?.email || 'admin@schoolos.online',
+      userRole: currentUser?.role || 'superAdmin',
+      action: 'update_paystack_config',
+      details: `Updated central Paystack Gateway configuration (Mode: ${updated.isLive ? 'Live' : 'Test'}).`,
+      timestamp: new Date().toISOString(),
+    });
+  };
+
+  const testPaystackGateway = async (secretKey?: string): Promise<{ success: boolean; message: string }> => {
+    return await apiTestPaystackConnection(secretKey);
+  };
+
+  const initializeSchoolSubscription = async (params: { 
+    planId?: string; 
+    tierCode?: string; 
+    academicYear?: string; 
+    term?: string; 
+    email: string; 
+    phone?: string; 
+    callbackUrl?: string 
+  }): Promise<PaystackInitializeResponse> => {
+    const targetSchoolId = school?.id || 'demo_school';
+    const targetSchoolName = school?.name || 'My School Institution';
+
+    const result = await apiInitializePaystackTransaction({
+      schoolId: targetSchoolId,
+      schoolName: targetSchoolName,
+      planId: params.planId || school?.planId || 'plan_basic',
+      tierCode: params.tierCode || school?.subscriptionPlan || 'basic',
+      academicYear: params.academicYear || school?.currentAcademicYear || '2025/2026',
+      term: params.term || school?.currentTerm || 'Term 2',
+      email: params.email,
+      phone: params.phone || school?.phone,
+      callbackUrl: params.callbackUrl
+    });
+
+    // Record pending transaction locally and in Firestore
+    const pendingTx: SubscriptionTransaction = {
+      id: `tx-sub-${result.reference}`,
+      schoolId: targetSchoolId,
+      schoolName: targetSchoolName,
+      schoolCode: school?.shortCode,
+      planId: params.planId || school?.planId || 'plan_basic',
+      tierName: result.tierName,
+      academicYear: params.academicYear || school?.currentAcademicYear || '2025/2026',
+      term: params.term || school?.currentTerm || 'Term 2',
+      amountGHS: result.amountGHS,
+      amountPesewas: result.amountPesewas,
+      currency: 'GHS',
+      reference: result.reference,
+      status: 'pending',
+      customerEmail: params.email,
+      customerPhone: params.phone || school?.phone,
+      customerName: currentUser?.fullName || school?.ownerName,
+      receiptNumber: result.receiptNumber || `REC-${new Date().getFullYear()}-SUB-${result.reference.slice(-4)}`,
+      createdAt: new Date().toISOString(),
+    };
+
+    await recordSubscriptionPayment(pendingTx);
+    return result;
+  };
+
+  const generateTransactionReference = async (
+    type: TransactionType = 'general',
+    schoolId?: string,
+    prefix?: string
+  ): Promise<DynamicReferenceResponse> => {
+    return await apiGenerateDynamicReference(type, schoolId || activeSchoolId, prefix);
+  };
+
+  const initializeStudentFeePayment = async (
+    params: PaystackFeeInitializeParams
+  ): Promise<PaystackFeeInitializeResponse> => {
+    return await apiInitializePaystackFeeTransaction({
+      ...params,
+      schoolId: params.schoolId || activeSchoolId,
+      schoolName: params.schoolName || school?.name
+    });
+  };
+
+  const verifySchoolSubscription = async (reference: string): Promise<PaystackVerifyResponse> => {
+    const result = await apiVerifyPaystackTransaction(reference);
+
+    if (result.success && (result.status === 'success' || (result as any).status === 'paid')) {
+      const targetSchoolId = school?.id || result.schoolId || '';
+      const planId = `plan_${(result.tierName || 'basic').toLowerCase()}`;
+      const academicYear = (result as any).academicYear || school?.currentAcademicYear || '2025/2026';
+      const term = (result as any).term || school?.currentTerm || 'Term 2';
+
+      // Update school subscription expiration in Firestore and state
+      if (targetSchoolId) {
+        await fsRenewSchoolSubscription(
+          targetSchoolId,
+          planId,
+          term,
+          academicYear,
+          result.amountGHS,
+          reference
+        );
+
+        setDbState(prev => {
+          const nextExpiry = new Date();
+          nextExpiry.setDate(nextExpiry.getDate() + 120);
+
+          return {
+            ...prev,
+            schools: prev.schools.map(s => {
+              if (s.id === targetSchoolId) {
+                return {
+                  ...s,
+                  status: 'active',
+                  planId: planId,
+                  subscriptionPlan: (result.tierName || 'basic').toLowerCase(),
+                  subscriptionExpiry: nextExpiry.toISOString().split('T')[0],
+                  currentTerm: term as any,
+                  currentAcademicYear: academicYear,
+                  updatedAt: new Date().toISOString()
+                };
+              }
+              return s;
+            })
+          };
+        });
+      }
+
+      // Update local transaction state
+      const matchingTx = (dbState.subscriptionTransactions || []).find(t => t.reference === reference);
+      if (matchingTx) {
+        const updatedTx: SubscriptionTransaction = {
+          ...matchingTx,
+          status: 'success',
+          paidAt: result.paidAt || new Date().toISOString(),
+          paymentChannel: result.paymentChannel || 'mobile_money',
+          receiptNumber: result.receiptNumber || matchingTx.receiptNumber,
+          gatewayResponse: 'Payment Successful',
+          updatedAt: new Date().toISOString()
+        };
+        await fsUpdateSubscriptionTransaction(matchingTx.id, updatedTx);
+
+        setDbState(prev => ({
+          ...prev,
+          subscriptionTransactions: (prev.subscriptionTransactions || []).map(t => t.id === matchingTx.id ? updatedTx : t)
+        }));
+      }
+
+      await fsAddAuditLog({
+        id: `audit-${Date.now()}`,
+        schoolId: targetSchoolId || 'platform',
+        schoolName: school?.name || 'Institutional School',
+        userId: currentUser?.id || 'system',
+        userName: currentUser?.fullName || 'School Owner',
+        userEmail: currentUser?.email || 'owner@school.edu.gh',
+        userRole: currentUser?.role || 'schoolOwner',
+        action: 'paystack_subscription_renewed',
+        details: `Successfully paid GH₵${result.amountGHS} for ${result.tierName || 'Platform'} subscription (${term}). Reference: ${reference}.`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return result;
+  };
+
+  const recordSubscriptionPayment = async (tx: SubscriptionTransaction): Promise<void> => {
+    setDbState(prev => ({
+      ...prev,
+      subscriptionTransactions: [tx, ...(prev.subscriptionTransactions || []).filter(t => t.id !== tx.id)]
+    }));
+
+    await fsRecordSubscriptionTransaction(tx);
+  };
+
+  const triggerTermRenewalReminders = async (academicYear?: string, term?: string): Promise<SubscriptionReminderResult> => {
+    const result = await apiTriggerSubscriptionReminders(
+      dbState.schools, 
+      academicYear || '2025/2026', 
+      term || 'Term 2'
+    );
+
+    await fsAddAuditLog({
+      id: `audit-${Date.now()}`,
+      schoolId: 'platform-wide',
+      schoolName: 'Platform Super Admin',
+      userId: currentUser?.id || 'super-admin',
+      userName: currentUser?.fullName || 'Super Administrator',
+      userEmail: currentUser?.email || 'admin@schoolos.online',
+      userRole: currentUser?.role || 'superAdmin',
+      action: 'dispatch_term_subscription_reminders',
+      details: `Dispatched automated SMS renewal reminders to ${result.remindersSent} schools with active contact numbers.`,
+      timestamp: new Date().toISOString(),
+    });
+
+    return result;
+  };
+
   return (
     <SchoolContext.Provider
       value={{
@@ -1265,6 +1653,10 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         posSales: posTransactions,
         messages,
         auditLogs,
+        communicationLogs: (dbState.communicationLogs || []).filter(c => currentUser?.role === 'superAdmin' || c.schoolId === activeSchoolId),
+        allCommunicationLogs: dbState.communicationLogs || [],
+        subscriptionTransactions: (dbState.subscriptionTransactions || []).filter(t => currentUser?.role === 'superAdmin' || t.schoolId === activeSchoolId),
+        allSubscriptionTransactions: dbState.subscriptionTransactions || [],
         settings,
         schoolUsers,
         allUsers: allUsersList,
@@ -1308,6 +1700,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         sendBroadcastMessage,
         sendSMSBroadcast,
+        sendDirectCommunication,
 
         approveSchool,
         rejectSchool,
@@ -1319,6 +1712,16 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         deletePlan,
         setSchoolFeatureOverride,
         assignSchoolPlan,
+
+        platformPaystack: dbState.platformPaystack || INITIAL_PAYSTACK_CONFIG,
+        updatePlatformPaystack,
+        testPaystackGateway,
+        initializeSchoolSubscription,
+        verifySchoolSubscription,
+        recordSubscriptionPayment,
+        triggerTermRenewalReminders,
+        generateTransactionReference,
+        initializeStudentFeePayment,
 
         createUserAccount,
         updateUserAccount,

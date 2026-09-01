@@ -18,7 +18,9 @@ import {
   SubscriptionTier,
   FeatureKey,
   UserRole,
-  PlatformCommunicationSettings
+  PlatformCommunicationSettings,
+  PaystackPlatformConfig,
+  SubscriptionTransaction
 } from '../types';
 
 export const INITIAL_PLANS: SubscriptionTier[] = [
@@ -161,12 +163,14 @@ export const INITIAL_USERS: UserProfile[] = [
 
 export const INITIAL_PLATFORM_COMMUNICATION: PlatformCommunicationSettings = {
   sms: {
-    provider: 'hubtel',
+    provider: 'arkesel',
     apiKey: '',
     apiSecret: '',
     senderId: 'SCHOOLOS',
-    apiUrl: 'https://api.hubtel.com/v1/messages/send',
-    isActive: false,
+    apiUrl: 'https://sms.arkesel.com/api/v2/sms/send',
+    isActive: true,
+    lastTestedAt: undefined,
+    lastTestStatus: 'untested'
   },
   whatsapp: {
     provider: 'meta',
@@ -175,13 +179,48 @@ export const INITIAL_PLATFORM_COMMUNICATION: PlatformCommunicationSettings = {
     phoneNumberId: '',
     businessAccountId: '',
     apiUrl: 'https://graph.facebook.com/v18.0',
-    isActive: false,
+    isActive: true,
+    lastTestedAt: undefined,
+    lastTestStatus: 'untested'
   },
+  providers: [
+    {
+      id: 'prov-arkesel-01',
+      type: 'sms',
+      provider: 'arkesel',
+      name: 'Arkesel SMS Gateway',
+      apiKey: '',
+      apiUrl: 'https://sms.arkesel.com/api/v2/sms/send',
+      senderId: 'SCHOOLOS',
+      isActive: true,
+      isPrimary: true,
+      lastTestStatus: 'untested'
+    },
+    {
+      id: 'prov-meta-wa-01',
+      type: 'whatsapp',
+      provider: 'meta',
+      name: 'Meta Cloud WhatsApp Business API',
+      apiKey: '',
+      phoneNumberId: '',
+      businessAccountId: '',
+      apiUrl: 'https://graph.facebook.com/v18.0',
+      isActive: true,
+      isPrimary: true,
+      lastTestStatus: 'untested'
+    }
+  ],
+  automatedTriggers: {
+    feePaymentReceipts: true,
+    attendanceAbsenceAlerts: true,
+    examResultsPublication: true,
+    generalAnnouncements: true
+  }
 };
 
 export const INITIAL_SETTINGS: SchoolSettings = {
   schoolId: '',
-  smsProvider: 'hubtel',
+  smsProvider: 'arkesel',
   smsSenderId: 'SCHOOL',
   smsBalance: 0,
   gradingScale: [
@@ -196,6 +235,16 @@ export const INITIAL_SETTINGS: SchoolSettings = {
   receiptFooter: 'Thank you for your payment. Keep this receipt for official clearance.',
   reopeningDate: '2026-09-08',
   vacationDate: '2026-12-18',
+};
+
+export const INITIAL_PAYSTACK_CONFIG: PaystackPlatformConfig = {
+  secretKey: '',
+  publicKey: '',
+  webhookSecret: '',
+  currency: 'GHS',
+  isLive: false,
+  isActive: true,
+  lastTestStatus: 'untested'
 };
 
 // Zero dummy records - Clean initial arrays
@@ -213,3 +262,5 @@ export const INITIAL_STORE_ITEMS: StoreItem[] = [];
 export const INITIAL_POS_TRANSACTIONS: POSTransaction[] = [];
 export const INITIAL_MESSAGES: BroadcastMessage[] = [];
 export const INITIAL_AUDIT_LOGS: AuditLog[] = [];
+export const INITIAL_SUBSCRIPTION_TRANSACTIONS: SubscriptionTransaction[] = [];
+

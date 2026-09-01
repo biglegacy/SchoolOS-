@@ -48,7 +48,7 @@ export const SuperAdminCommunication: React.FC<SuperAdminCommunicationProps> = (
         <div>
           <h2 className="text-sm font-bold text-slate-900">Communication Infrastructure & Gateway</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Configure platform-level SMS gateways (Hubtel, Arkesel, mNotify) and Meta WhatsApp Business API.
+            Configure platform-level Arkesel SMS gateway and Meta WhatsApp Business API.
           </p>
         </div>
 
@@ -123,8 +123,7 @@ export const SuperAdminCommunication: React.FC<SuperAdminCommunicationProps> = (
                 })}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600"
               >
-                <option value="hubtel">Hubtel Ghana (Recommended for GH)</option>
-                <option value="arkesel">Arkesel SMS</option>
+                <option value="arkesel">Arkesel SMS Gateway (Ghana & West Africa)</option>
                 <option value="mnotify">mNotify Communications</option>
                 <option value="twilio">Twilio Global</option>
               </select>

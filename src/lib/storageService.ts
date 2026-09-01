@@ -14,9 +14,12 @@ import {
   POSTransaction, 
   BroadcastMessage, 
   AuditLog, 
-  SchoolSettings,
+  SchoolSettings, 
   SubscriptionTier,
-  PlatformCommunicationSettings
+  PlatformCommunicationSettings,
+  CommunicationLog,
+  SubscriptionTransaction,
+  PaystackPlatformConfig
 } from '../types';
 import { 
   INITIAL_SCHOOLS, 
@@ -36,7 +39,9 @@ import {
   INITIAL_MESSAGES, 
   INITIAL_AUDIT_LOGS, 
   INITIAL_SETTINGS,
-  INITIAL_PLATFORM_COMMUNICATION
+  INITIAL_PLATFORM_COMMUNICATION,
+  INITIAL_PAYSTACK_CONFIG,
+  INITIAL_SUBSCRIPTION_TRANSACTIONS
 } from './mockData';
 
 const DB_KEY = 'schoolos_online_v2_db';
@@ -58,8 +63,11 @@ export interface DatabaseState {
   posTransactions: POSTransaction[];
   messages: BroadcastMessage[];
   auditLogs: AuditLog[];
+  communicationLogs?: CommunicationLog[];
+  subscriptionTransactions?: SubscriptionTransaction[];
   settings: Record<string, SchoolSettings>;
   platformCommunication: PlatformCommunicationSettings;
+  platformPaystack?: PaystackPlatformConfig;
 }
 
 export const loadInitialDatabase = (): DatabaseState => {
@@ -78,6 +86,15 @@ export const loadInitialDatabase = (): DatabaseState => {
         }
         if (!parsed.platformCommunication) {
           parsed.platformCommunication = INITIAL_PLATFORM_COMMUNICATION;
+        }
+        if (!parsed.communicationLogs) {
+          parsed.communicationLogs = [];
+        }
+        if (!parsed.subscriptionTransactions) {
+          parsed.subscriptionTransactions = INITIAL_SUBSCRIPTION_TRANSACTIONS;
+        }
+        if (!parsed.platformPaystack) {
+          parsed.platformPaystack = INITIAL_PAYSTACK_CONFIG;
         }
         return parsed;
       }
@@ -103,8 +120,11 @@ export const loadInitialDatabase = (): DatabaseState => {
     posTransactions: INITIAL_POS_TRANSACTIONS,
     messages: INITIAL_MESSAGES,
     auditLogs: INITIAL_AUDIT_LOGS,
+    communicationLogs: [],
+    subscriptionTransactions: INITIAL_SUBSCRIPTION_TRANSACTIONS,
     settings: {},
     platformCommunication: INITIAL_PLATFORM_COMMUNICATION,
+    platformPaystack: INITIAL_PAYSTACK_CONFIG,
   };
 
   try {

@@ -9,12 +9,20 @@ import {
   Server,
   Layers,
   Sparkles,
-  ShieldAlert
+  ShieldAlert,
+  Radio,
+  Key,
+  Zap,
+  ArrowRight
 } from 'lucide-react';
 import { useSchool } from '../../contexts/SchoolContext';
 
-export const SuperAdminSystemSettings: React.FC = () => {
-  const { allSchools, resetDemoData, settings, updateSettings } = useSchool();
+interface SuperAdminSystemSettingsProps {
+  onNavigateToCommAPI?: () => void;
+}
+
+export const SuperAdminSystemSettings: React.FC<SuperAdminSystemSettingsProps> = ({ onNavigateToCommAPI }) => {
+  const { allSchools, resetDemoData, settings, updateSettings, platformCommunication } = useSchool();
   const [platformName, setPlatformName] = useState('SchoolOS Online');
   const [supportPhone, setSupportPhone] = useState('+233 20 000 0001');
   const [supportEmail, setSupportEmail] = useState('support@schoolos.online');
@@ -58,7 +66,7 @@ export const SuperAdminSystemSettings: React.FC = () => {
         <div>
           <h2 className="text-base font-bold text-slate-900 tracking-tight">System Settings & Platform Parameters</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Configure global platform variables, support endpoints, and database maintenance tools.
+            Configure global platform variables, centralized communication endpoints, and database maintenance tools.
           </p>
         </div>
 
@@ -69,6 +77,40 @@ export const SuperAdminSystemSettings: React.FC = () => {
           <Download className="w-3.5 h-3.5 text-slate-500" />
           <span>Export Database Snapshot</span>
         </button>
+      </div>
+
+      {/* Communications API Quick Link Banner */}
+      <div className="bg-linear-to-r from-teal-950 to-slate-900 text-white rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="p-2.5 bg-teal-800/80 border border-teal-600 rounded-xl text-teal-300">
+            <Radio className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold">Central Communications API Gateway</h3>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                platformCommunication?.sms?.isActive ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-700 text-slate-400'
+              }`}>
+                {platformCommunication?.sms?.isActive ? 'ACTIVE' : 'CONFIG REQUIRED'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Provider: <span className="font-mono text-teal-300 capitalize">{platformCommunication?.sms?.provider || 'arkesel'}</span> | WhatsApp: <span className="font-mono text-teal-300 capitalize">{platformCommunication?.whatsapp?.provider || 'meta'}</span>
+            </p>
+          </div>
+        </div>
+
+        {onNavigateToCommAPI && (
+          <button
+            type="button"
+            onClick={onNavigateToCommAPI}
+            className="px-4 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shadow-sm"
+          >
+            <Key className="w-3.5 h-3.5" />
+            <span>Manage API Credentials</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {savedSuccess && (

@@ -396,7 +396,10 @@ export const POSRegisterView: React.FC = () => {
               <div className="text-center border-b border-dashed border-gray-400 pb-3 space-y-0.5">
                 <div className="font-bold text-sm uppercase">{school?.name}</div>
                 <div className="text-[11px] text-gray-500">Store & Stationery POS Slip</div>
-                <div className="text-[10px] text-gray-400 font-bold">{activeReceipt.receiptNumber}</div>
+                <div className="text-[10px] text-gray-700 font-bold">Receipt #: {activeReceipt.receiptNumber}</div>
+                {(activeReceipt.reference || activeReceipt.transactionReference) && (
+                  <div className="text-[9px] text-gray-500 font-mono">Ref: {activeReceipt.reference || activeReceipt.transactionReference}</div>
+                )}
                 <div className="text-[10px] text-gray-500">{formatDate(activeReceipt.timestamp)}</div>
               </div>
 

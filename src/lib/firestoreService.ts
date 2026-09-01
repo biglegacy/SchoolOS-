@@ -28,7 +28,18 @@ import {
   AuditLog, 
   SchoolSettings,
   SubscriptionTier,
-  PlatformCommunicationSettings
+  PlatformCommunicationSettings,
+  CommunicationLog,
+  SubscriptionTransaction,
+  PaystackPlatformConfig,
+  PaystackInitializeParams,
+  PaystackInitializeResponse,
+  PaystackVerifyResponse,
+  SubscriptionReminderResult,
+  DynamicReferenceResponse,
+  PaystackFeeInitializeParams,
+  PaystackFeeInitializeResponse,
+  TransactionType
 } from '../types';
 import { 
   INITIAL_SCHOOLS, 
@@ -47,7 +58,9 @@ import {
   INITIAL_POS_TRANSACTIONS, 
   INITIAL_MESSAGES, 
   INITIAL_AUDIT_LOGS, 
-  INITIAL_PLATFORM_COMMUNICATION
+  INITIAL_PLATFORM_COMMUNICATION,
+  INITIAL_PAYSTACK_CONFIG,
+  INITIAL_SUBSCRIPTION_TRANSACTIONS
 } from './mockData';
 import { DatabaseState } from './storageService';
 
@@ -69,8 +82,10 @@ export const COLLECTIONS = {
   POS_TRANSACTIONS: 'posTransactions',
   MESSAGES: 'messages',
   AUDIT_LOGS: 'auditLogs',
+  COMMUNICATION_LOGS: 'communicationLogs',
   SCHOOL_SETTINGS: 'schoolSettings',
   PLATFORM_SETTINGS: 'platformSettings',
+  SUBSCRIPTION_TRANSACTIONS: 'subscriptionTransactions',
 };
 
 /**
@@ -102,8 +117,13 @@ export function sanitizeForFirestore<T>(data: T): T {
 export async function seedFirestoreIfEmpty(): Promise<void> {
   if (!db) return;
   try {
-    const schoolsSnap = await getDocs(collection(db, COLLECTIONS.SCHOOLS));
-    if (schoolsSnap.empty) {
+    const fetchSchoolsPromise = getDocs(collection(db, COLLECTIONS.SCHOOLS));
+    const timeoutPromise = new Promise<null>((_, reject) => 
+      setTimeout(() => reject(new Error('Firestore seed check timed out')), 4000)
+    );
+
+    const schoolsSnap = await Promise.race([fetchSchoolsPromise, timeoutPromise]);
+    if (schoolsSnap && (schoolsSnap as any).empty) {
       console.log('🌱 Seeding initial SchoolOS platform data to Firestore...');
       const batch = writeBatch(db);
 
@@ -181,22 +201,33 @@ export async function seedFirestoreIfEmpty(): Promise<void> {
       console.log('✅ Firestore seeding completed successfully.');
     }
   } catch (error) {
-    console.warn('Firestore initial check/seed warning:', error);
+    console.info('Firestore initial seed/connection notice:', (error as any)?.message || error);
   }
 }
 
-// Live real-time listener for the entire database state from Cloud Firestore
-export function subscribeToFirestore(
-  onDataChange: (data: Partial<DatabaseState>) => void
-): () => void {
-  if (!db) {
-    return () => {};
-  }
+// Live real-time multicast listener for the entire database state from Cloud Firestore
+const activeSubscribers = new Set<(data: Partial<DatabaseState>) => void>();
+let globalUnsubs: Unsubscribe[] = [];
+let cachedIncomingState: Partial<DatabaseState> = {};
+
+function notifyAllSubscribers(incoming: Partial<DatabaseState>) {
+  cachedIncomingState = { ...cachedIncomingState, ...incoming };
+  activeSubscribers.forEach(cb => {
+    try {
+      cb(incoming);
+    } catch (e) {
+      console.warn('Error in Firestore subscriber callback:', e);
+    }
+  });
+}
+
+function startGlobalFirestoreListeners() {
+  if (!db || globalUnsubs.length > 0) return;
 
   const handleSyncError = (colName: string, err: any) => {
     if (err?.code === 'unavailable' || err?.message?.includes('offline') || err?.message?.includes('Could not reach Cloud Firestore')) {
-      // Graceful notice for offline state
-      console.info(`Firestore ${colName} listener is operating with cached data.`);
+      // Graceful offline caching notification
+      console.info(`Firestore ${colName} listener is operating with offline persistent cache.`);
     } else {
       console.warn(`Firestore ${colName} sync notice:`, err?.message || err);
     }
@@ -208,7 +239,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.SCHOOLS), (snapshot) => {
       const schools = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as School));
-      onDataChange({ schools });
+      notifyAllSubscribers({ schools });
     }, (err) => handleSyncError('schools', err))
   );
 
@@ -216,7 +247,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.USERS), (snapshot) => {
       const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile));
-      onDataChange({ users });
+      notifyAllSubscribers({ users });
     }, (err) => handleSyncError('users', err))
   );
 
@@ -224,7 +255,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.PLANS), (snapshot) => {
       const plans = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SubscriptionTier));
-      onDataChange({ plans });
+      notifyAllSubscribers({ plans });
     }, (err) => handleSyncError('plans', err))
   );
 
@@ -232,7 +263,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.STUDENTS), (snapshot) => {
       const students = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Student));
-      onDataChange({ students });
+      notifyAllSubscribers({ students });
     }, (err) => handleSyncError('students', err))
   );
 
@@ -240,7 +271,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.TEACHERS), (snapshot) => {
       const teachers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Teacher));
-      onDataChange({ teachers });
+      notifyAllSubscribers({ teachers });
     }, (err) => handleSyncError('teachers', err))
   );
 
@@ -248,7 +279,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.CLASSROOMS), (snapshot) => {
       const classrooms = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Classroom));
-      onDataChange({ classrooms });
+      notifyAllSubscribers({ classrooms });
     }, (err) => handleSyncError('classrooms', err))
   );
 
@@ -256,7 +287,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.SUBJECTS), (snapshot) => {
       const subjects = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Subject));
-      onDataChange({ subjects });
+      notifyAllSubscribers({ subjects });
     }, (err) => handleSyncError('subjects', err))
   );
 
@@ -264,7 +295,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.ATTENDANCE), (snapshot) => {
       const attendance = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord));
-      onDataChange({ attendance });
+      notifyAllSubscribers({ attendance });
     }, (err) => handleSyncError('attendance', err))
   );
 
@@ -272,7 +303,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.EXAMINATIONS), (snapshot) => {
       const examinations = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Examination));
-      onDataChange({ examinations });
+      notifyAllSubscribers({ examinations });
     }, (err) => handleSyncError('examinations', err))
   );
 
@@ -280,7 +311,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.RESULTS), (snapshot) => {
       const results = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ExaminationResult));
-      onDataChange({ results });
+      notifyAllSubscribers({ results });
     }, (err) => handleSyncError('results', err))
   );
 
@@ -288,7 +319,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.FEE_STRUCTURES), (snapshot) => {
       const feeStructures = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeeStructure));
-      onDataChange({ feeStructures });
+      notifyAllSubscribers({ feeStructures });
     }, (err) => handleSyncError('feeStructures', err))
   );
 
@@ -296,7 +327,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.FEE_PAYMENTS), (snapshot) => {
       const feePayments = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeePayment));
-      onDataChange({ feePayments });
+      notifyAllSubscribers({ feePayments });
     }, (err) => handleSyncError('feePayments', err))
   );
 
@@ -304,7 +335,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.STORE_ITEMS), (snapshot) => {
       const storeItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as StoreItem));
-      onDataChange({ storeItems });
+      notifyAllSubscribers({ storeItems });
     }, (err) => handleSyncError('storeItems', err))
   );
 
@@ -312,7 +343,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.POS_TRANSACTIONS), (snapshot) => {
       const posTransactions = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as POSTransaction));
-      onDataChange({ posTransactions });
+      notifyAllSubscribers({ posTransactions });
     }, (err) => handleSyncError('posTransactions', err))
   );
 
@@ -320,7 +351,7 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.MESSAGES), (snapshot) => {
       const messages = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as BroadcastMessage));
-      onDataChange({ messages });
+      notifyAllSubscribers({ messages });
     }, (err) => handleSyncError('messages', err))
   );
 
@@ -328,18 +359,42 @@ export function subscribeToFirestore(
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.AUDIT_LOGS), (snapshot) => {
       const auditLogs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AuditLog));
-      onDataChange({ auditLogs });
+      notifyAllSubscribers({ auditLogs });
     }, (err) => handleSyncError('auditLogs', err))
+  );
+
+  // Communication Logs listener
+  unsubs.push(
+    onSnapshot(collection(db, COLLECTIONS.COMMUNICATION_LOGS), (snapshot) => {
+      const communicationLogs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CommunicationLog));
+      notifyAllSubscribers({ communicationLogs });
+    }, (err) => handleSyncError('communicationLogs', err))
   );
 
   // Platform settings listener
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.PLATFORM_SETTINGS), (snapshot) => {
       const commDoc = snapshot.docs.find(d => d.id === 'communication');
+      const paystackDoc = snapshot.docs.find(d => d.id === 'paystack');
+      const updates: Partial<DatabaseState> = {};
       if (commDoc) {
-        onDataChange({ platformCommunication: commDoc.data() as PlatformCommunicationSettings });
+        updates.platformCommunication = commDoc.data() as PlatformCommunicationSettings;
+      }
+      if (paystackDoc) {
+        updates.platformPaystack = paystackDoc.data() as PaystackPlatformConfig;
+      }
+      if (Object.keys(updates).length > 0) {
+        notifyAllSubscribers(updates);
       }
     }, (err) => handleSyncError('platformSettings', err))
+  );
+
+  // Subscription Transactions listener
+  unsubs.push(
+    onSnapshot(collection(db, COLLECTIONS.SUBSCRIPTION_TRANSACTIONS), (snapshot) => {
+      const subscriptionTransactions = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SubscriptionTransaction));
+      notifyAllSubscribers({ subscriptionTransactions });
+    }, (err) => handleSyncError('subscriptionTransactions', err))
   );
 
   // School settings listener
@@ -349,12 +404,38 @@ export function subscribeToFirestore(
       snapshot.docs.forEach(d => {
         settingsMap[d.id] = d.data() as SchoolSettings;
       });
-      onDataChange({ settings: settingsMap });
+      notifyAllSubscribers({ settings: settingsMap });
     }, (err) => handleSyncError('schoolSettings', err))
   );
 
+  globalUnsubs = unsubs;
+}
+
+export function subscribeToFirestore(
+  onDataChange: (data: Partial<DatabaseState>) => void
+): () => void {
+  if (!db) {
+    return () => {};
+  }
+
+  activeSubscribers.add(onDataChange);
+
+  // If there is cached state already received, provide it immediately
+  if (Object.keys(cachedIncomingState).length > 0) {
+    onDataChange(cachedIncomingState);
+  }
+
+  // Start listeners if this is the first subscriber
+  if (globalUnsubs.length === 0) {
+    startGlobalFirestoreListeners();
+  }
+
   return () => {
-    unsubs.forEach(unsub => unsub());
+    activeSubscribers.delete(onDataChange);
+    if (activeSubscribers.size === 0) {
+      globalUnsubs.forEach(unsub => unsub());
+      globalUnsubs = [];
+    }
   };
 }
 
@@ -664,3 +745,275 @@ export async function fsUpdateSchoolSettings(schoolId: string, settings: Partial
     handleFirestoreError(error, OperationType.UPDATE, `/${COLLECTIONS.SCHOOL_SETTINGS}/${schoolId}`);
   }
 }
+
+export async function fsAddCommunicationLog(log: CommunicationLog): Promise<void> {
+  if (!db) return;
+  try {
+    await setDoc(doc(db, COLLECTIONS.COMMUNICATION_LOGS, log.id), sanitizeForFirestore(log));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `/${COLLECTIONS.COMMUNICATION_LOGS}/${log.id}`);
+  }
+}
+
+export async function fsDeleteCommunicationLog(logId: string): Promise<void> {
+  if (!db) return;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.COMMUNICATION_LOGS, logId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `/${COLLECTIONS.COMMUNICATION_LOGS}/${logId}`);
+  }
+}
+
+// ----------------------------------------------------
+// SUBSCRIPTION TRANSACTIONS & PAYSTACK PERSISTENCE
+// ----------------------------------------------------
+
+export async function fsRecordSubscriptionTransaction(tx: SubscriptionTransaction): Promise<void> {
+  if (!db) return;
+  try {
+    await setDoc(
+      doc(db, COLLECTIONS.SUBSCRIPTION_TRANSACTIONS, tx.id), 
+      sanitizeForFirestore(tx),
+      { merge: true }
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `/${COLLECTIONS.SUBSCRIPTION_TRANSACTIONS}/${tx.id}`);
+  }
+}
+
+export async function fsUpdateSubscriptionTransaction(txId: string, updates: Partial<SubscriptionTransaction>): Promise<void> {
+  if (!db) return;
+  try {
+    await updateDoc(
+      doc(db, COLLECTIONS.SUBSCRIPTION_TRANSACTIONS, txId), 
+      sanitizeForFirestore(updates) as Record<string, any>
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `/${COLLECTIONS.SUBSCRIPTION_TRANSACTIONS}/${txId}`);
+  }
+}
+
+export async function fsSavePaystackConfig(config: Partial<PaystackPlatformConfig>): Promise<void> {
+  if (!db) return;
+  try {
+    await setDoc(
+      doc(db, COLLECTIONS.PLATFORM_SETTINGS, 'paystack'), 
+      sanitizeForFirestore({
+        ...config,
+        updatedAt: new Date().toISOString()
+      }), 
+      { merge: true }
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `/${COLLECTIONS.PLATFORM_SETTINGS}/paystack`);
+  }
+}
+
+export async function fsRenewSchoolSubscription(
+  schoolId: string, 
+  planId: string, 
+  term: string, 
+  academicYear: string, 
+  amountGHS: number,
+  txReference: string
+): Promise<void> {
+  if (!db) return;
+  try {
+    // 1 term = approx 4 months (~120 days)
+    const nextExpiry = new Date();
+    nextExpiry.setDate(nextExpiry.getDate() + 120);
+
+    const schoolUpdates: Partial<School> = {
+      planId: planId,
+      subscriptionPlan: planId.replace('plan_', ''),
+      status: 'active',
+      subscriptionExpiry: nextExpiry.toISOString().split('T')[0],
+      currentTerm: (term as any) || 'Term 2',
+      currentAcademicYear: academicYear || '2025/2026',
+      updatedAt: new Date().toISOString()
+    };
+
+    await updateDoc(
+      doc(db, COLLECTIONS.SCHOOLS, schoolId), 
+      sanitizeForFirestore(schoolUpdates) as Record<string, any>
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `/${COLLECTIONS.SCHOOLS}/${schoolId}`);
+  }
+}
+
+// ----------------------------------------------------
+// FULL-STACK PAYSTACK API CLIENT METHODS
+// ----------------------------------------------------
+
+export async function apiInitializePaystackTransaction(params: PaystackInitializeParams): Promise<PaystackInitializeResponse> {
+  const response = await fetch('/api/paystack/initialize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || data.message || 'Failed to initialize Paystack payment');
+  }
+  return data;
+}
+
+export async function apiVerifyPaystackTransaction(reference: string): Promise<PaystackVerifyResponse> {
+  const response = await fetch(`/api/paystack/verify/${encodeURIComponent(reference)}`);
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || data.message || 'Verification failed');
+  }
+  return data.verification;
+}
+
+export async function apiSavePaystackConfig(config: Partial<PaystackPlatformConfig>): Promise<{ success: boolean; message: string }> {
+  const response = await fetch('/api/paystack/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || data.message || 'Failed to save Paystack settings');
+  }
+  return data;
+}
+
+export async function apiTestPaystackConnection(secretKey?: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch('/api/paystack/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secretKey })
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || data.error || 'Paystack test failed');
+  }
+  return data;
+}
+
+export async function apiTriggerSubscriptionReminders(schools: School[], academicYear?: string, term?: string): Promise<SubscriptionReminderResult> {
+  const response = await fetch('/api/subscriptions/run-reminders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ schools, academicYear, term })
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to dispatch subscription reminders');
+  }
+  return data;
+}
+
+// ----------------------------------------------------
+// DYNAMIC TRANSACTION REFERENCE CLIENT SERVICES
+// ----------------------------------------------------
+
+export async function apiGenerateDynamicReference(
+  type: TransactionType = 'general',
+  schoolId?: string,
+  prefix?: string
+): Promise<DynamicReferenceResponse> {
+  try {
+    const response = await fetch('/api/transactions/generate-reference', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, schoolId, prefix })
+    });
+    const data = await response.json();
+    if (response.ok && data.success) {
+      return data;
+    }
+    throw new Error(data.error || 'Backend reference generation returned unsuccessful');
+  } catch (err: any) {
+    console.warn('Backend reference generator unreachable, utilizing client cryptosecure generator fallback:', err?.message);
+    return generateClientFallbackReference(type, schoolId, prefix);
+  }
+}
+
+export function generateClientFallbackReference(
+  type: TransactionType = 'general',
+  schoolId?: string,
+  customPrefix?: string
+): DynamicReferenceResponse {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const mins = String(now.getMinutes()).padStart(2, '0');
+  const secs = String(now.getSeconds()).padStart(2, '0');
+  const dateStr = `${year}${month}${day}`;
+  const timeStr = `${hours}${mins}${secs}`;
+
+  let typePrefix = 'TXN';
+  let receiptPrefix = 'REC';
+
+  switch (type) {
+    case 'subscription':
+      typePrefix = 'SCH-SUB';
+      receiptPrefix = 'REC-SUB';
+      break;
+    case 'fee_payment':
+      typePrefix = 'SCH-FEE';
+      receiptPrefix = 'REC-FEE';
+      break;
+    case 'pos_sale':
+      typePrefix = 'POS-SALE';
+      receiptPrefix = 'REC-POS';
+      break;
+    default:
+      typePrefix = customPrefix || 'TXN';
+      receiptPrefix = 'REC';
+      break;
+  }
+
+  // Generate 6 hex entropy characters using window.crypto
+  let entropyHex = '';
+  let entropyReceipt = '';
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+    const bytes = new Uint8Array(3);
+    window.crypto.getRandomValues(bytes);
+    entropyHex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    
+    const recBytes = new Uint8Array(2);
+    window.crypto.getRandomValues(recBytes);
+    entropyReceipt = Array.from(recBytes).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+  } else {
+    entropyHex = Math.random().toString(36).substring(2, 8).toUpperCase();
+    entropyReceipt = Math.random().toString(36).substring(2, 6).toUpperCase();
+  }
+
+  const reference = `${typePrefix}-${dateStr}-${timeStr}-${entropyHex}`;
+  const receiptNumber = `${receiptPrefix}-${dateStr}-${entropyReceipt}`;
+
+  return {
+    success: true,
+    reference,
+    receiptNumber,
+    timestamp: now.toISOString(),
+    type
+  };
+}
+
+export async function apiInitializePaystackFeeTransaction(
+  params: PaystackFeeInitializeParams
+): Promise<PaystackFeeInitializeResponse> {
+  const response = await fetch('/api/paystack/initialize-fee', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || data.message || 'Failed to initialize online fee payment');
+  }
+  return data;
+}
+
+
+

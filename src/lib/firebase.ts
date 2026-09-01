@@ -101,8 +101,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Connection check with server ping
-export async function testFirestoreConnection(): Promise<boolean> {
+// Connection check with server ping per Firebase integration guidelines
+export async function testConnection(): Promise<boolean> {
   if (!db) return false;
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
@@ -114,3 +114,7 @@ export async function testFirestoreConnection(): Promise<boolean> {
     return false;
   }
 }
+
+// Initial connection test
+testConnection();
+export const testFirestoreConnection = testConnection;
