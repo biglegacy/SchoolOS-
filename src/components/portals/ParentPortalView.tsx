@@ -496,6 +496,11 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                           Verified
                         </span>
                       </div>
+                      {(rec.transactionReference || rec.reference) && (
+                        <p className="text-[10px] font-mono text-teal-700 font-medium">
+                          Ref: {rec.transactionReference || rec.reference}
+                        </p>
+                      )}
                       <p className="text-[11px] text-slate-500">{formatDate(rec.paymentDate || rec.date || '')} • {(rec.paymentMethod || rec.method || 'Cash').toUpperCase()}</p>
                       <p className="text-[10px] font-mono text-slate-400">Payer: {rec.payerName || 'Guardian'}</p>
                     </div>

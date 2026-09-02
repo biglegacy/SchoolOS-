@@ -732,6 +732,7 @@ export interface PaystackInitializeResponse {
   authorizationUrl?: string;
   accessCode?: string;
   reference: string;
+  receiptNumber?: string;
   amountGHS: number;
   amountPesewas: number;
   tierName: string;
@@ -787,6 +788,7 @@ export interface DynamicReferenceResponse {
 
 export interface PaystackFeeInitializeParams {
   schoolId: string;
+  schoolName?: string;
   studentId: string;
   studentName: string;
   admissionNumber?: string;
