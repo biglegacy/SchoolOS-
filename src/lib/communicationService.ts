@@ -2,10 +2,11 @@ import {
   School, 
   PlatformCommunicationSettings, 
   CommunicationLog, 
+  SmsMessage,
   SendCommunicationParams, 
   CommunicationTestParams 
 } from '../types';
-import { fsAddCommunicationLog } from './firestoreService';
+import { fsAddCommunicationLog, fsAddSmsMessage } from './firestoreService';
 
 /**
  * Platform Central Communication Service
@@ -90,7 +91,7 @@ export async function sendCentralCommunication(
 
   // 1. Authoritative Registered Sender Information
   const registeredSchoolName = school.name.trim();
-  const registeredPhone = school.registeredPhone || school.phone || '0240000000';
+  const registeredPhone = school.registeredPhone || school.phone || '';
   const approvedSenderId = sanitizeSenderId(registeredSchoolName, school.shortCode, school.approvedSenderId);
   const formattedRecipient = formatGhanaPhoneNumber(recipient);
 
@@ -143,13 +144,21 @@ export async function sendCentralCommunication(
         })
       });
 
-      const responseData = await res.json();
-      if (res.ok && responseData.success) {
+      const responseText = await res.text();
+      let responseData: any = null;
+      try {
+        responseData = responseText && responseText.trim() ? JSON.parse(responseText) : null;
+      } catch {
+        const cleanSnippet = responseText ? responseText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) : '';
+        responseData = { error: cleanSnippet ? `Gateway response: ${cleanSnippet}` : `Non-JSON response (HTTP ${res.status})` };
+      }
+
+      if (res.ok && responseData?.success) {
         status = 'delivered';
         providerResponse = responseData.providerResponse || 'Delivered via Arkesel SMS Gateway';
       } else {
-        status = responseData.status === 'failed' ? 'failed' : 'failed';
-        providerResponse = responseData.error || responseData.providerResponse || `Arkesel Gateway Error (HTTP ${res.status})`;
+        status = 'failed';
+        providerResponse = responseData?.error || responseData?.message || responseData?.providerResponse || `Arkesel Gateway Error (HTTP ${res.status})`;
         console.warn(`[Arkesel Gateway Dispatch Notice]:`, providerResponse);
       }
     } else {
@@ -160,7 +169,10 @@ export async function sendCentralCommunication(
   } catch (err: any) {
     console.error(`[Communication Service Error]:`, err);
     status = 'failed';
-    providerResponse = err?.message || 'Gateway transmission network error';
+    const isTimeout = err?.name === 'TimeoutError' || err?.message?.includes('timeout');
+    providerResponse = isTimeout
+      ? 'Communication service timed out connecting to SMS gateway'
+      : (err?.message || 'Gateway transmission network error');
   }
 
   // 4. Create Immutable Communication Log (Zero API secrets stored)
@@ -180,12 +192,32 @@ export async function sendCentralCommunication(
     relatedRecordId,
     providerResponse,
     costGHS: Number(costGHS.toFixed(2)),
-    timestamp
+    timestamp,
+    academicYear: school.currentAcademicYear || '2025/2026',
+    term: school.currentTerm ? `Term ${school.currentTerm}` : 'Term 1',
+    createdBy: school.email || 'system'
   };
 
-  // 5. Persist to Firestore (isolated per school and multi-tenant protected)
+  // 5. Persist to Firestore: communicationLogs & smsMessages collections
   try {
     await fsAddCommunicationLog(commLog);
+    if (isSMS) {
+      const smsDoc: SmsMessage = {
+        id: logId,
+        schoolId: school.id,
+        recipient: formattedRecipient || recipient,
+        sender: approvedSenderId || registeredSchoolName,
+        message: formattedMessage,
+        status: status === 'delivered' ? 'delivered' : 'failed',
+        costGHS: Number(costGHS.toFixed(2)),
+        arkeselResponse: providerResponse,
+        createdAt: timestamp,
+        createdBy: school.email || 'system',
+        academicYear: school.currentAcademicYear || '2025/2026',
+        term: school.currentTerm ? `Term ${school.currentTerm}` : 'Term 1'
+      };
+      await fsAddSmsMessage(smsDoc);
+    }
   } catch (e) {
     console.info('Communication log stored in local state (Firestore sync note).', e);
   }
@@ -257,20 +289,65 @@ export async function testCentralGateway(
         })
       });
 
-      const data = await res.json();
+      const responseText = await res.text();
+      let data: any = null;
+      try {
+        data = responseText && responseText.trim() ? JSON.parse(responseText) : null;
+      } catch {
+        const cleanSnippet = responseText ? responseText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+        data = { 
+          rawResponse: responseText, 
+          cleanedSnippet: cleanSnippet,
+          message: cleanSnippet || `Non-JSON response from server (HTTP ${res.status})` 
+        };
+      }
+
+      if (!data || !responseText || !responseText.trim()) {
+        return {
+          success: false,
+          statusCode: res.status || 502,
+          message: `Communication service returned an empty response (HTTP ${res.status}).`,
+          responsePayload: { rawResponse: '<empty body>', httpStatus: res.status },
+          timestamp: now
+        };
+      }
+
+      let resolvedMessage = data.message;
+      if (!resolvedMessage) {
+        if (data.rawResponse) {
+          const cleanText = data.rawResponse.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          if (res.status === 502) {
+            resolvedMessage = `Backend Communication Gateway error (HTTP 502): ${cleanText.slice(0, 150) || 'Service temporarily unavailable'}`;
+          } else if (res.status === 504) {
+            resolvedMessage = 'Backend Communication Gateway timed out (HTTP 504).';
+          } else if (cleanText) {
+            resolvedMessage = `Gateway returned HTTP ${res.status}: ${cleanText.slice(0, 150)}`;
+          } else {
+            resolvedMessage = `Gateway returned HTTP ${res.status}`;
+          }
+        } else if (res.status === 502) {
+          resolvedMessage = 'Backend Communication Gateway temporarily unavailable (HTTP 502).';
+        } else {
+          resolvedMessage = data.success ? 'Arkesel Gateway Connected Successfully' : `Arkesel Gateway Returned Error (HTTP ${res.status})`;
+        }
+      }
+
       return {
         success: Boolean(data.success),
         statusCode: data.statusCode || res.status,
-        message: data.message || (data.success ? 'Arkesel Gateway Connected Successfully' : 'Arkesel Gateway Returned an Error'),
+        message: resolvedMessage,
         responsePayload: data.responsePayload || data,
         timestamp: data.timestamp || now
       };
     } catch (networkErr: any) {
+      const isTimeout = networkErr?.name === 'TimeoutError' || networkErr?.message?.includes('timeout');
       return {
         success: false,
-        statusCode: 502,
-        message: `Network Error: Could not connect to backend communication service: ${networkErr.message}`,
-        responsePayload: { error: networkErr.message },
+        statusCode: isTimeout ? 504 : 502,
+        message: isTimeout 
+          ? 'Gateway connection timed out: Arkesel communication service did not respond.'
+          : `Network Error: Could not connect to backend communication service (${networkErr?.message || 'Connection failed'})`,
+        responsePayload: { error: networkErr?.message || 'NETWORK_ERROR', isTimeout },
         timestamp: now
       };
     }

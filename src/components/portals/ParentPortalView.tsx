@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSchool } from '../../contexts/SchoolContext';
 import { Student } from '../../types';
@@ -27,9 +27,13 @@ import {
   Receipt,
   Mail,
   MapPin,
-  TrendingUp
+  TrendingUp,
+  Search,
+  X,
+  UserX
 } from 'lucide-react';
 import { formatGHS, formatDate, formatGhanaPhone } from '../../utils/formatting';
+import { calculateStudentFeeBalance } from '../../utils/calculations';
 import { TerminalReportModal } from '../reports/TerminalReportModal';
 import { GhanaFlagBadge } from '../common/EmptyState';
 
@@ -42,8 +46,8 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
 }) => {
   const { currentUser } = useAuth();
   const { 
-    students, 
-    classrooms, 
+    students = [], 
+    classrooms = [], 
     school, 
     feeStructures = [], 
     feePayments = [], 
@@ -55,19 +59,40 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'reports' | 'fees' | 'attendance' | 'announcements' | 'teacher'>(initialSubTab);
   const [selectedStudentForReport, setSelectedReportStudent] = useState<Student | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
 
-  // Filter linked wards for this parent (by guardian phone/email or user profile)
-  const myChildren = students.filter(s => {
-    if (!currentUser) return false;
-    const phoneMatch = s.guardians?.some(g => g.phone && currentUser.phone && g.phone.replace(/[^0-9]/g, '') === currentUser.phone.replace(/[^0-9]/g, ''));
-    const emailMatch = s.guardians?.some(g => g.email && currentUser.email && g.email.toLowerCase() === currentUser.email.toLowerCase());
-    return phoneMatch || emailMatch;
-  });
+  // Authorized wards for this parent (strictly retrieved by parent ID authentication)
+  const authorizedWards = useMemo(() => {
+    return students;
+  }, [students]);
 
-  // If no direct guardian match, show the enrolled students in the school
-  const displayChildren = myChildren.length > 0 ? myChildren : students.slice(0, 3);
-  const [selectedChildIndex, setSelectedChildIndex] = useState(0);
-  const activeChild: Student | undefined = displayChildren[selectedChildIndex] || displayChildren[0];
+  // Instant real-time search filtering across name, admission number, student ID, classroom, and level
+  const filteredWards = useMemo(() => {
+    if (!searchQuery.trim()) return authorizedWards;
+    const q = searchQuery.toLowerCase().trim();
+    return authorizedWards.filter(s => {
+      const fullName = `${s.firstName || ''} ${s.lastName || ''} ${s.otherNames || ''}`.toLowerCase();
+      const adm = (s.admissionNumber || '').toLowerCase();
+      const id = (s.id || '').toLowerCase();
+      const cls = (s.classroomName || '').toLowerCase();
+      const lvl = (s.level || '').toLowerCase();
+      return fullName.includes(q) || adm.includes(q) || id.includes(q) || cls.includes(q) || lvl.includes(q);
+    });
+  }, [authorizedWards, searchQuery]);
+
+  // Keep active selected student synchronized with search results
+  useEffect(() => {
+    if (filteredWards.length > 0) {
+      if (!selectedStudentId || !filteredWards.some(w => w.id === selectedStudentId)) {
+        setSelectedStudentId(filteredWards[0].id);
+      }
+    } else {
+      setSelectedStudentId('');
+    }
+  }, [filteredWards, selectedStudentId]);
+
+  const activeChild: Student | undefined = filteredWards.find(w => w.id === selectedStudentId) || filteredWards[0];
 
   const activeChildClass = classrooms.find(c => c.id === activeChild?.currentClassroomId);
 
@@ -80,10 +105,15 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
     ? feePayments.filter(p => p.studentId === activeChild.id)
     : [];
 
-  const totalBilled = applicableFeeStructure ? applicableFeeStructure.totalAmount : 0;
-  const totalPaid = wardPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-  const outstandingBalance = Math.max(0, totalBilled - totalPaid);
-  const isFullyPaid = totalBilled > 0 && outstandingBalance === 0;
+  const amountToBePaid = (activeChild && typeof activeChild.feesAmount === 'number' && !isNaN(activeChild.feesAmount) && activeChild.feesAmount >= 0)
+    ? activeChild.feesAmount
+    : (applicableFeeStructure ? applicableFeeStructure.totalAmount : 0);
+  const amountPaid = wardPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+  const { amountOwing, paymentStatus } = calculateStudentFeeBalance(amountToBePaid, amountPaid);
+  const totalBilled = amountToBePaid;
+  const totalPaid = amountPaid;
+  const outstandingBalance = amountOwing;
+  const isFullyPaid = paymentStatus === 'Paid';
 
   // Real Academic Results for Active Ward
   const allResults = examResults.length > 0 ? examResults : results;
@@ -105,7 +135,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   const daysAbsent = wardAttendance.filter(a => a.status === 'absent').length;
   const attendanceRate = totalAttendanceLogged > 0 ? Math.round((daysPresent / totalAttendanceLogged) * 100) : null;
 
-  if (displayChildren.length === 0) {
+  if (authorizedWards.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 text-center max-w-2xl mx-auto space-y-4 shadow-xs">
         <div className="w-16 h-16 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center mx-auto">
@@ -130,13 +160,13 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       
-      {/* 1. PARENT WELCOME & WARD SELECTION BANNER (White Theme) */}
-      <div className="bg-white border border-slate-200 text-slate-900 rounded-2xl p-5 sm:p-7 shadow-xs">
+      {/* 1. PARENT WELCOME & PROMINENT STUDENT SEARCH BAR */}
+      <div className="bg-white border border-slate-200 text-slate-900 rounded-2xl p-5 sm:p-7 shadow-xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold">
-              <HeartHandshake className="w-3.5 h-3.5 text-sky-600" />
+              <HeartHandshake className="w-3.5 h-3.5 text-teal-700" />
               <span>Parent & Guardian Console</span>
             </div>
             
@@ -145,14 +175,14 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
             </h1>
             
             <p className="text-xs text-slate-500">
-              Monitoring <b className="text-slate-900">{displayChildren.length} Registered Ward{displayChildren.length > 1 ? 's' : ''}</b> at <b className="text-slate-900">{school?.name}</b>
+              Monitoring <b className="text-slate-900">{authorizedWards.length} Registered Ward{authorizedWards.length > 1 ? 's' : ''}</b> at <b className="text-slate-900">{school?.name}</b>
             </p>
           </div>
 
           {activeChild && (
             <button
               onClick={() => setSelectedReportStudent(activeChild)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
             >
               <FileText className="w-4 h-4 text-white" />
               <span>Official Terminal Report Card</span>
@@ -160,30 +190,134 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
           )}
         </div>
 
-        {/* Multi-Child Selector */}
-        {displayChildren.length > 1 && (
-          <div className="flex items-center gap-2 mt-5 pt-4 border-t border-slate-100 overflow-x-auto">
-            <span className="text-xs text-slate-500 font-bold uppercase tracking-wider shrink-0 mr-1">
-              Select Ward:
-            </span>
-            {displayChildren.map((child, idx) => (
+        {/* PROMINENT STUDENT SEARCH BAR */}
+        <div className="pt-2">
+          <div className="relative flex items-center">
+            <div className="absolute left-3.5 text-slate-400 pointer-events-none flex items-center">
+              <Search className="w-4 h-4" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search your registered wards by student name, admission #, student ID, or classroom..."
+              className="w-full pl-10 pr-28 py-2.5 bg-slate-50 border border-slate-200 focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/10 rounded-xl text-xs font-medium text-slate-900 transition-all outline-none"
+            />
+            {searchQuery && (
               <button
-                key={child.id}
-                onClick={() => setSelectedChildIndex(idx)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  selectedChildIndex === idx
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+                onClick={() => setSearchQuery('')}
+                className="absolute right-14 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-200 transition-colors"
+                title="Clear search"
               >
-                {child.firstName} {child.lastName} ({child.classroomName || 'Class'})
+                <X className="w-3.5 h-3.5" />
               </button>
-            ))}
+            )}
+            <div className="absolute right-3">
+              <span className="text-[10px] font-mono font-bold text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-md">
+                {filteredWards.length} {filteredWards.length === 1 ? 'ward' : 'wards'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* MULTI-CHILD SELECTION STRIP / WARD CARDS */}
+        {filteredWards.length > 0 ? (
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider">
+                {searchQuery ? 'Search Results / Select Ward:' : 'Your Registered Wards:'}
+              </span>
+              {searchQuery && (
+                <span className="text-xs text-teal-800 font-medium">
+                  Showing matches for "{searchQuery}"
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+              {filteredWards.map((child) => {
+                const isSelected = activeChild?.id === child.id;
+                const childPayments = feePayments.filter(p => p.studentId === child.id);
+                const childBilled = (typeof child.feesAmount === 'number' && child.feesAmount >= 0)
+                  ? child.feesAmount
+                  : (feeStructures.find(f => f.classroomId === child.currentClassroomId)?.totalAmount || 0);
+                const childPaid = childPayments.reduce((acc, c) => acc + (c.amount || 0), 0);
+                const childOwing = Math.max(0, childBilled - childPaid);
+
+                return (
+                  <button
+                    key={child.id}
+                    onClick={() => setSelectedStudentId(child.id)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                      isSelected
+                        ? 'bg-teal-50/90 border-teal-600 shadow-2xs ring-1 ring-teal-600'
+                        : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {child.photoUrl ? (
+                        <img
+                          src={child.photoUrl}
+                          alt={child.firstName}
+                          className="w-9 h-9 rounded-xl object-cover border border-slate-200 shrink-0"
+                        />
+                      ) : (
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                          isSelected ? 'bg-teal-800 text-white' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          {child.firstName[0]}{child.lastName[0]}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs text-slate-900 truncate">
+                          {child.firstName} {child.lastName}
+                        </div>
+                        <div className="text-[10px] text-slate-500 truncate">
+                          <span className="font-mono text-teal-900 font-semibold">{child.admissionNumber}</span> • {child.classroomName || 'Class'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      {childOwing === 0 ? (
+                        <span className="text-[9.5px] font-bold text-emerald-800 bg-emerald-100/80 px-1.5 py-0.5 rounded">
+                          Fees Paid
+                        </span>
+                      ) : (
+                        <span className="text-[9.5px] font-bold text-amber-800 bg-amber-100/80 px-1.5 py-0.5 rounded">
+                          {formatGHS(childOwing)} Due
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* EMPTY STATE WHEN NO STUDENT MATCHES SEARCH QUERY */
+          <div className="p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-slate-200 text-slate-500 flex items-center justify-center mx-auto">
+              <UserX className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-bold text-slate-800 text-sm">No Registered Wards Found</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                No students linked to your account match "<b>{searchQuery}</b>". Please check the spelling of the name, student ID, admission number, or classroom.
+              </p>
+            </div>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Clear Search Filter</span>
+            </button>
           </div>
         )}
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 overflow-x-auto">
+        <div className="flex items-center gap-2 pt-3 border-t border-slate-100 overflow-x-auto">
           {[
             { id: 'overview', label: 'Ward Overview', icon: Layers },
             { id: 'reports', label: 'Terminal Report Card', icon: FileText },
@@ -210,7 +344,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-sky-400' : 'text-slate-400'}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-teal-400' : 'text-slate-400'}`} />
                 <span>{tab.label}</span>
               </button>
             );
@@ -372,34 +506,38 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
               <div className="space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                    Term Fee Summary
+                    Student Fee Status
                   </h3>
-                  {totalBilled > 0 && outstandingBalance === 0 ? (
-                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                      Paid in Full
+                  {paymentStatus === 'Paid' ? (
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      Paid (₵0.00)
+                    </span>
+                  ) : paymentStatus === 'Partially Paid' ? (
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                      Partially Paid
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                      Statement
+                    <span className="text-[10px] font-bold text-rose-800 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
+                      Unpaid
                     </span>
                   )}
                 </div>
 
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5 text-xs">
                   <div className="flex justify-between text-slate-600">
-                    <span>Total Applicable Bill:</span>
+                    <span className="font-medium">Amount to Be Paid:</span>
                     <span className="font-mono font-bold text-slate-900">
-                      {totalBilled > 0 ? formatGHS(totalBilled) : 'GHS 0.00'}
+                      {amountToBePaid > 0 ? formatGHS(amountToBePaid) : 'GH₵ 0.00'}
                     </span>
                   </div>
-                  <div className="flex justify-between text-emerald-700 font-bold">
-                    <span>Payments Verified:</span>
-                    <span className="font-mono">{formatGHS(totalPaid)}</span>
+                  <div className="flex justify-between text-emerald-700 font-medium">
+                    <span>Amount Paid:</span>
+                    <span className="font-mono font-bold">{formatGHS(amountPaid)}</span>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-2 font-black text-slate-900 text-sm">
-                    <span>Outstanding Balance:</span>
-                    <span className={`font-mono ${outstandingBalance === 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {formatGHS(outstandingBalance)}
+                    <span>Amount Owing / Balance:</span>
+                    <span className={`font-mono ${amountOwing === 0 ? 'text-emerald-700' : 'text-amber-600'}`}>
+                      {formatGHS(amountOwing)}
                     </span>
                   </div>
                 </div>
@@ -432,9 +570,50 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold px-3 py-1 bg-teal-50 text-teal-800 border border-teal-200 rounded-xl flex items-center gap-1">
-                <Receipt className="w-3.5 h-3.5 text-teal-700" />
-                <span>Account Status: {outstandingBalance === 0 && totalBilled > 0 ? 'Cleared' : totalPaid > 0 ? 'Partial' : 'Pending'}</span>
+              <span className={`text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 ${
+                paymentStatus === 'Paid' 
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                  : paymentStatus === 'Partially Paid'
+                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                  : 'bg-rose-50 text-rose-800 border-rose-200'
+              }`}>
+                <Receipt className="w-3.5 h-3.5" />
+                <span>Payment Status: <b>{paymentStatus}</b></span>
+              </span>
+            </div>
+          </div>
+
+          {/* Standard 3-Card Summary Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
+                Amount to Be Paid
+              </span>
+              <div className="text-lg font-black text-slate-900">
+                {formatGHS(amountToBePaid)}
+              </div>
+              <span className="text-[10px] text-slate-500">Total assigned for academic term</span>
+            </div>
+
+            <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200">
+              <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider block mb-1">
+                Amount Paid
+              </span>
+              <div className="text-lg font-black text-emerald-700">
+                {formatGHS(amountPaid)}
+              </div>
+              <span className="text-[10px] text-emerald-700">Verified receipts to date</span>
+            </div>
+
+            <div className={`p-4 rounded-xl border ${amountOwing > 0 ? 'bg-amber-50/70 border-amber-200' : 'bg-emerald-50/60 border-emerald-200'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block mb-1 ${amountOwing > 0 ? 'text-amber-800' : 'text-emerald-800'}`}>
+                Amount Owing / Balance
+              </span>
+              <div className={`text-lg font-black ${amountOwing > 0 ? 'text-amber-600' : 'text-emerald-700'}`}>
+                {formatGHS(amountOwing)}
+              </div>
+              <span className="text-[10px] text-slate-500">
+                {amountOwing > 0 ? 'Outstanding balance remaining' : 'Fully settled (₵0.00)'}
               </span>
             </div>
           </div>
@@ -522,36 +701,65 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
           </div>
 
           {/* Official Payment Channels for Guardians */}
-          <div className="p-4 sm:p-5 bg-teal-50/80 rounded-2xl border border-teal-200 space-y-3">
+          <div className="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-teal-800 shrink-0" />
-              <h4 className="text-xs font-bold uppercase tracking-wider text-teal-950">
-                Official School Payment Channels (Bank & Mobile Money)
+              <Building2 className="w-4 h-4 text-slate-700 shrink-0" />
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                Official School Payment Channels
               </h4>
             </div>
-            <p className="text-xs text-teal-900/80">
-              When making payments, please specify your ward's admission number <b>{activeChild.admissionNumber}</b> as the payment reference.
-            </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
-              <div className="p-3 bg-white rounded-xl border border-teal-200 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">MTN Mobile Money</span>
-                <div className="font-mono font-bold text-slate-900 text-sm">054 289 1902</div>
-                <div className="text-[10.5px] text-slate-600">Account: {school?.name || 'School Account'}</div>
-              </div>
+            {school?.bankAccountNumber || school?.momoNumber || school?.paymentInstructions ? (
+              <>
+                <p className="text-xs text-slate-600">
+                  When making payments, please specify your ward's admission number <b className="text-slate-900">{activeChild.admissionNumber}</b> as the payment reference.
+                </p>
 
-              <div className="p-3 bg-white rounded-xl border border-teal-200 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Telecel Cash</span>
-                <div className="font-mono font-bold text-slate-900 text-sm">020 918 3821</div>
-                <div className="text-[10.5px] text-slate-600">Merchant Code: 88129</div>
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs pt-1">
+                  {school?.momoNumber && (
+                    <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1">
+                      <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">
+                        {school?.momoProvider || 'Mobile Money'}
+                      </span>
+                      <div className="font-mono font-bold text-slate-900 text-sm tracking-wide">{school.momoNumber}</div>
+                      {school.momoAccountName && (
+                        <div className="text-[11px] text-slate-600">Account: {school.momoAccountName}</div>
+                      )}
+                    </div>
+                  )}
 
-              <div className="p-3 bg-white rounded-xl border border-teal-200 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Commercial Bank (GCB)</span>
-                <div className="font-mono font-bold text-slate-900 text-sm">1081130092812</div>
-                <div className="text-[10.5px] text-slate-600">Branch: Main Branch</div>
+                  {(school?.bankName || school?.bankAccountNumber) && (
+                    <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1">
+                      <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
+                        {school.bankName || 'Bank Deposit / Transfer'}
+                      </span>
+                      {school.bankAccountNumber && (
+                        <div className="font-mono font-bold text-slate-900 text-sm tracking-wide">{school.bankAccountNumber}</div>
+                      )}
+                      {school.bankAccountName && (
+                        <div className="text-[11px] text-slate-600">Account: {school.bankAccountName}</div>
+                      )}
+                      {school.bankBranch && (
+                        <div className="text-[10.5px] text-slate-500">Branch: {school.bankBranch}</div>
+                      )}
+                    </div>
+                  )}
+
+                  {school?.paymentInstructions && (
+                    <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1 col-span-1 sm:col-span-2 lg:col-span-1">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Payment Instructions
+                      </span>
+                      <p className="text-xs text-slate-700 whitespace-pre-line">{school.paymentInstructions}</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-600">
+                Official bank and mobile money payment details have not yet been published in the system. Please contact the school accounts office or bursary directly for fee settlement instructions.
               </div>
-            </div>
+            )}
           </div>
 
         </div>
@@ -645,7 +853,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
               School Circulars & Parent Notices
             </h3>
             <p className="text-xs text-slate-500">
-              Official circulars and announcements from {school?.name || 'School Administration'}.
+              Official circulars and announcements {school?.name ? `from ${school.name}` : ''}.
             </p>
           </div>
 

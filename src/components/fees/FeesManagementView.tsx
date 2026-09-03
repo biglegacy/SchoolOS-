@@ -23,6 +23,7 @@ import { GhanaFlagBadge } from '../common/EmptyState';
 
 export const FeesManagementView: React.FC = () => {
   const { 
+    school,
     students, 
     classrooms, 
     feeStructures, 
@@ -56,24 +57,38 @@ export const FeesManagementView: React.FC = () => {
   const feeSummaries = Array.isArray(rawSummaries) ? rawSummaries : [];
 
   // Metrics
-  const totalBilled = feeSummaries.reduce((acc, f) => acc + (f?.totalBilled || 0), 0);
-  const totalCollected = feeSummaries.reduce((acc, f) => acc + (f?.totalPaid || 0), 0);
-  const totalOutstanding = feeSummaries.reduce((acc, f) => acc + (f?.balance || 0), 0);
-  const defaultersCount = feeSummaries.filter(f => (f?.balance || 0) > 0).length;
+  const totalBilled = feeSummaries.reduce((acc, f) => acc + (f?.amountToBePaid ?? f?.totalBilled ?? 0), 0);
+  const totalCollected = feeSummaries.reduce((acc, f) => acc + (f?.amountPaid ?? f?.totalPaid ?? 0), 0);
+  const totalOutstanding = feeSummaries.reduce((acc, f) => acc + (f?.amountOwing ?? f?.balance ?? 0), 0);
+  const defaultersCount = feeSummaries.filter(f => (f?.amountOwing ?? f?.balance ?? 0) > 0).length;
 
   const filteredSummaries = feeSummaries.filter(f => {
     const matchesSearch = f.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       f.admissionNumber.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesClass = classFilter === 'all' || f.classroomId === classFilter;
-    const matchesStatus = statusFilter === 'all' || f.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || 
+      f.status === statusFilter || 
+      (f.paymentStatus && f.paymentStatus.toLowerCase().replace(' ', '_') === statusFilter.toLowerCase().replace(' ', '_'));
     return matchesSearch && matchesClass && matchesStatus;
   });
 
+  const selectedSummary = selectedStudentForPay 
+    ? feeSummaries.find(f => f.studentId === selectedStudentForPay.id) 
+    : null;
+  const currentToBePaid = selectedSummary?.amountToBePaid ?? selectedSummary?.totalBilled ?? 0;
+  const currentPaid = selectedSummary?.amountPaid ?? selectedSummary?.totalPaid ?? 0;
+  const currentOwing = selectedSummary?.amountOwing ?? selectedSummary?.balance ?? 0;
+  const projectedOwing = Math.max(0, currentOwing - Number(paymentAmount || 0));
+
   const handleOpenPayment = async (student: Student) => {
     setSelectedStudentForPay(student);
+    const summary = feeSummaries.find(f => f.studentId === student.id);
+    const remainingToPay = summary ? (summary.amountOwing ?? summary.balance ?? 0) : 0;
+    setPaymentAmount(remainingToPay > 0 ? remainingToPay : 0);
+
     const primaryGuardian = student.guardians[0];
-    setPayerName(primaryGuardian?.name || `${student.firstName} Guardian`);
-    setPayerPhone(primaryGuardian?.phone || '0240000000');
+    setPayerName(primaryGuardian?.name || `${student.firstName} ${student.lastName} (Guardian)`);
+    setPayerPhone(primaryGuardian?.phone || '');
     
     setIsGeneratingRef(true);
     setIsPaymentModalOpen(true);
@@ -127,13 +142,20 @@ export const FeesManagementView: React.FC = () => {
     });
 
     setIsPaymentModalOpen(false);
-    setActiveReceipt(receipt);
+    setActiveReceipt({
+      ...receipt,
+      amountToBePaid: currentToBePaid,
+      previousPaid: currentPaid,
+      totalPaidToDate: currentPaid + Number(paymentAmount),
+      remainingOwing: projectedOwing,
+      paymentStatus: projectedOwing === 0 ? 'Paid' : 'Partially Paid'
+    });
     setActionSuccess(`Payment of ${formatGHS(paymentAmount)} recorded for ${selectedStudentForPay.firstName}!`);
     setTimeout(() => setActionSuccess(null), 4000);
   };
 
   const handleSendDefaultersSMS = async () => {
-    const defaulters = feeSummaries.filter(f => f.balance > 0);
+    const defaulters = feeSummaries.filter(f => (f.amountOwing ?? f.balance ?? 0) > 0);
     if (defaulters.length === 0) {
       alert('No fee defaulters found.');
       return;
@@ -148,6 +170,29 @@ export const FeesManagementView: React.FC = () => {
       setActionSuccess(`Broadcast SMS sent to ${defaulters.length} guardian phone numbers!`);
       setTimeout(() => setActionSuccess(null), 4000);
     }
+  };
+
+  const getStatusBadge = (status?: string, paymentStatus?: string) => {
+    const normalized = (paymentStatus || status || 'unpaid').toLowerCase();
+    if (normalized.includes('paid') && !normalized.includes('part') && !normalized.includes('un')) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+          Paid
+        </span>
+      );
+    }
+    if (normalized.includes('part')) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+          Partially Paid
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+        Unpaid
+      </span>
+    );
   };
 
   return (
@@ -261,6 +306,9 @@ export const FeesManagementView: React.FC = () => {
           ) : (
             filteredSummaries.map((item) => {
               const studentObj = students.find(s => s.id === item.studentId);
+              const toBePaid = item.amountToBePaid ?? item.totalBilled ?? 0;
+              const paid = item.amountPaid ?? item.totalPaid ?? 0;
+              const owing = item.amountOwing ?? item.balance ?? 0;
 
               return (
                 <div key={item.studentId} className="p-4 space-y-3">
@@ -269,28 +317,22 @@ export const FeesManagementView: React.FC = () => {
                       <div className="font-bold text-gray-900 text-sm">{item.studentName}</div>
                       <div className="text-[11px] text-gray-400 font-mono">{item.admissionNumber}</div>
                     </div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
-                      item.status === 'paid' ? 'bg-emerald-100 text-emerald-800' :
-                      item.status === 'partial' ? 'bg-amber-100 text-amber-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {item.status.toUpperCase()}
-                    </span>
+                    {getStatusBadge(item.status, item.paymentStatus)}
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 bg-gray-50/80 p-2.5 rounded-xl border border-gray-100 text-center">
                     <div>
-                      <span className="text-[9px] text-gray-400 font-bold uppercase block">Billed</span>
-                      <div className="font-bold text-gray-800 text-xs">{formatGHS(item.totalBilled)}</div>
+                      <span className="text-[9px] text-gray-500 font-bold uppercase block">Amount to Be Paid</span>
+                      <div className="font-bold text-gray-800 text-xs">{formatGHS(toBePaid)}</div>
                     </div>
                     <div>
-                      <span className="text-[9px] text-gray-400 font-bold uppercase block">Paid</span>
-                      <div className="font-bold text-emerald-700 text-xs">{formatGHS(item.totalPaid)}</div>
+                      <span className="text-[9px] text-gray-500 font-bold uppercase block">Amount Paid</span>
+                      <div className="font-bold text-emerald-700 text-xs">{formatGHS(paid)}</div>
                     </div>
                     <div>
-                      <span className="text-[9px] text-gray-400 font-bold uppercase block">Balance</span>
-                      <div className={`font-black text-xs ${item.balance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                        {formatGHS(item.balance)}
+                      <span className="text-[9px] text-gray-500 font-bold uppercase block">Amount Owing</span>
+                      <div className={`font-black text-xs ${owing > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                        {formatGHS(owing)}
                       </div>
                     </div>
                   </div>
@@ -319,66 +361,71 @@ export const FeesManagementView: React.FC = () => {
           <table className="w-full text-left text-xs text-gray-600">
             <thead className="bg-gray-50 border-b border-gray-200 text-gray-700 font-bold uppercase text-[10px] tracking-wider">
               <tr>
-                <th className="px-5 py-3">Student Name</th>
+                <th className="px-5 py-3">Student Name & ID</th>
                 <th className="px-4 py-3">Classroom</th>
-                <th className="px-4 py-3">Total Bill (GHS)</th>
-                <th className="px-4 py-3">Paid so Far (GHS)</th>
-                <th className="px-4 py-3">Balance (GHS)</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Amount to Be Paid</th>
+                <th className="px-4 py-3">Amount Paid</th>
+                <th className="px-4 py-3">Amount Owing / Balance</th>
+                <th className="px-4 py-3">Payment Status</th>
                 <th className="px-5 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 font-medium">
-              {filteredSummaries.map((item) => {
-                const studentObj = students.find(s => s.id === item.studentId);
+              {filteredSummaries.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-xs text-gray-500 font-medium bg-gray-50/50">
+                    No fee records found for current filter.
+                  </td>
+                </tr>
+              ) : (
+                filteredSummaries.map((item) => {
+                  const studentObj = students.find(s => s.id === item.studentId);
+                  const toBePaid = item.amountToBePaid ?? item.totalBilled ?? 0;
+                  const paid = item.amountPaid ?? item.totalPaid ?? 0;
+                  const owing = item.amountOwing ?? item.balance ?? 0;
 
-                return (
-                  <tr key={item.studentId} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div className="font-bold text-gray-900 text-sm">{item.studentName}</div>
-                      <div className="text-[11px] text-gray-400 font-mono">{item.admissionNumber}</div>
-                    </td>
+                  return (
+                    <tr key={item.studentId} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="font-bold text-gray-900 text-sm">{item.studentName}</div>
+                        <div className="text-[11px] text-gray-400 font-mono">{item.admissionNumber}</div>
+                      </td>
 
-                    <td className="px-4 py-3.5">
-                      <span className="font-semibold text-gray-800">{item.classroomName}</span>
-                    </td>
+                      <td className="px-4 py-3.5">
+                        <span className="font-semibold text-gray-800">{item.classroomName}</span>
+                      </td>
 
-                    <td className="px-4 py-3.5 font-bold text-gray-900">
-                      {formatGHS(item.totalBilled)}
-                    </td>
+                      <td className="px-4 py-3.5 font-bold text-gray-900">
+                        {formatGHS(toBePaid)}
+                      </td>
 
-                    <td className="px-4 py-3.5 font-bold text-emerald-700">
-                      {formatGHS(item.totalPaid)}
-                    </td>
+                      <td className="px-4 py-3.5 font-bold text-emerald-700">
+                        {formatGHS(paid)}
+                      </td>
 
-                    <td className="px-4 py-3.5">
-                      <span className={`font-black ${item.balance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                        {formatGHS(item.balance)}
-                      </span>
-                    </td>
+                      <td className="px-4 py-3.5">
+                        <span className={`font-black ${owing > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                          {formatGHS(owing)}
+                        </span>
+                      </td>
 
-                    <td className="px-4 py-3.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        item.status === 'paid' ? 'bg-emerald-100 text-emerald-800' :
-                        item.status === 'partial' ? 'bg-amber-100 text-amber-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {item.status.toUpperCase()}
-                      </span>
-                    </td>
+                      <td className="px-4 py-3.5">
+                        {getStatusBadge(item.status, item.paymentStatus)}
+                      </td>
 
-                    <td className="px-5 py-3.5 text-right">
-                      <button
-                        onClick={() => studentObj && handleOpenPayment(studentObj)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
-                      >
-                        <CreditCard className="w-3.5 h-3.5" />
-                        <span>Record Payment</span>
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          onClick={() => studentObj && handleOpenPayment(studentObj)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>Record Payment</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -393,9 +440,27 @@ export const FeesManagementView: React.FC = () => {
         maxWidth="2xl"
       >
         <form onSubmit={handleRecordPayment} className="space-y-4">
+          {/* Real-time Fee Summary Banner */}
+          <div className="grid grid-cols-3 gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-200 text-center">
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase block">Amount to Be Paid</span>
+              <span className="text-sm font-bold text-gray-900">{formatGHS(currentToBePaid)}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase block">Amount Paid So Far</span>
+              <span className="text-sm font-bold text-emerald-700">{formatGHS(currentPaid)}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase block">Current Amount Owing</span>
+              <span className={`text-sm font-black ${currentOwing > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                {formatGHS(currentOwing)}
+              </span>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Amount to Pay (GH₵) *</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Payment Amount (GH₵) *</label>
               <input
                 type="number"
                 required
@@ -405,6 +470,9 @@ export const FeesManagementView: React.FC = () => {
                 onChange={e => setPaymentAmount(Number(e.target.value))}
                 className="w-full px-3 py-2 text-sm font-bold text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
+              <p className="text-[10px] text-gray-500 mt-1">
+                Projected Remaining Balance: <span className="font-bold text-amber-600">{formatGHS(projectedOwing)}</span>
+              </p>
             </div>
 
             <div>
@@ -494,13 +562,13 @@ export const FeesManagementView: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsPaymentModalOpen(false)}
-              className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold text-xs rounded-lg transition-colors"
+              className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold text-xs rounded-lg transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-lg transition-colors shadow-xs"
+              className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-lg transition-colors shadow-xs cursor-pointer"
             >
               Confirm & Issue Receipt
             </button>
@@ -520,9 +588,21 @@ export const FeesManagementView: React.FC = () => {
           <div className="space-y-4">
             <div className="p-6 bg-gray-50 rounded-xl border border-gray-300 space-y-4 font-mono text-xs">
               <div className="text-center border-b border-dashed border-gray-400 pb-3 space-y-1">
-                <div className="font-bold text-sm text-gray-900 uppercase">School Fee Payment Receipt</div>
-                <div className="text-gray-500">SchoolOS Online Official Receipt</div>
-                <div className="font-bold text-teal-800">{activeReceipt.receiptNumber}</div>
+                {school?.logo && (
+                  <img src={school.logo} alt={school?.name || 'School Crest'} className="w-12 h-12 mx-auto object-contain mb-1" />
+                )}
+                {school?.name && (
+                  <div className="font-bold text-sm text-gray-900 uppercase tracking-tight">{school.name}</div>
+                )}
+                {school?.address && (
+                  <div className="text-[11px] text-gray-600">{school.address}</div>
+                )}
+                <div className="flex flex-wrap items-center justify-center gap-x-2 text-[10px] text-gray-500">
+                  {school?.phone && <span>Tel: {school.phone}</span>}
+                  {school?.email && <span>Email: {school.email}</span>}
+                </div>
+                <div className="font-bold text-xs text-gray-800 uppercase pt-1">Official School Fee Payment Receipt</div>
+                <div className="font-mono font-bold text-teal-800">{activeReceipt.receiptNumber}</div>
               </div>
 
               <div className="space-y-1 text-gray-700">
@@ -552,9 +632,32 @@ export const FeesManagementView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="border-t border-b border-dashed border-gray-400 py-3 flex justify-between text-sm font-black text-gray-900">
-                <span>AMOUNT PAID:</span>
-                <span className="text-teal-700">{formatGHS(activeReceipt.amount)}</span>
+              {/* Comprehensive Breakdown */}
+              <div className="border-t border-b border-dashed border-gray-400 py-3 space-y-1.5 text-xs">
+                <div className="flex justify-between text-gray-600">
+                  <span>Amount to Be Paid:</span>
+                  <span className="font-bold text-gray-900">{formatGHS(activeReceipt.amountToBePaid || 0)}</span>
+                </div>
+                <div className="flex justify-between text-teal-700 font-bold text-sm">
+                  <span>AMOUNT PAID NOW:</span>
+                  <span>{formatGHS(activeReceipt.amount)}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>Total Amount Paid to Date:</span>
+                  <span className="font-bold text-emerald-700">{formatGHS(activeReceipt.totalPaidToDate || activeReceipt.amount)}</span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-gray-200 font-bold">
+                  <span>Amount Owing / Balance:</span>
+                  <span className={(activeReceipt.remainingOwing || 0) > 0 ? 'text-amber-600' : 'text-emerald-600'}>
+                    {formatGHS(activeReceipt.remainingOwing || 0)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[11px]">
+                  <span>Payment Status:</span>
+                  <span className="font-bold uppercase text-teal-800">
+                    {activeReceipt.paymentStatus || ((activeReceipt.remainingOwing || 0) === 0 ? 'PAID' : 'PARTIALLY PAID')}
+                  </span>
+                </div>
               </div>
 
               <div className="text-center text-[10px] text-gray-500 pt-2">
@@ -565,7 +668,7 @@ export const FeesManagementView: React.FC = () => {
             <div className="flex justify-between items-center pt-2">
               <button
                 onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold text-xs"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold text-xs cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 <span>Print Official Receipt</span>
@@ -573,7 +676,7 @@ export const FeesManagementView: React.FC = () => {
 
               <button
                 onClick={() => setActiveReceipt(null)}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-xs"
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-xs cursor-pointer"
               >
                 Done
               </button>

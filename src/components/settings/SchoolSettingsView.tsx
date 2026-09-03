@@ -63,6 +63,19 @@ export const SchoolSettingsView: React.FC = () => {
     sbaMaxScore: school?.sbaMaxScore ?? 30,
     examMaxScore: school?.examMaxScore ?? 70,
     assessmentRatio: school?.assessmentRatio || '30/70',
+    // Official Payment Channels
+    bankName: school?.bankName || '',
+    bankAccountNumber: school?.bankAccountNumber || '',
+    bankAccountName: school?.bankAccountName || '',
+    bankBranch: school?.bankBranch || '',
+    momoProvider: school?.momoProvider || 'MTN Mobile Money',
+    momoNumber: school?.momoNumber || '',
+    momoAccountName: school?.momoAccountName || '',
+    paymentInstructions: school?.paymentInstructions || '',
+    // Institutional Leadership
+    principalName: school?.principalName || '',
+    principalTitle: school?.principalTitle || 'Head of Institution',
+    principalPhone: school?.principalPhone || '',
   });
 
   useEffect(() => {
@@ -85,6 +98,17 @@ export const SchoolSettingsView: React.FC = () => {
         sbaMaxScore: school.sbaMaxScore ?? 30,
         examMaxScore: school.examMaxScore ?? 70,
         assessmentRatio: school.assessmentRatio || '30/70',
+        bankName: school.bankName || '',
+        bankAccountNumber: school.bankAccountNumber || '',
+        bankAccountName: school.bankAccountName || '',
+        bankBranch: school.bankBranch || '',
+        momoProvider: school.momoProvider || 'MTN Mobile Money',
+        momoNumber: school.momoNumber || '',
+        momoAccountName: school.momoAccountName || '',
+        paymentInstructions: school.paymentInstructions || '',
+        principalName: school.principalName || '',
+        principalTitle: school.principalTitle || 'Head of Institution',
+        principalPhone: school.principalPhone || '',
       });
     }
   }, [school]);
@@ -514,6 +538,170 @@ export const SchoolSettingsView: React.FC = () => {
                 value={formData.website || ''}
                 onChange={e => setFormData({ ...formData, website: e.target.value })}
                 className="w-full px-3 py-2 text-xs font-mono border border-slate-200 bg-slate-50/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Institutional Leadership & Administration */}
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <Award className="w-4 h-4 text-teal-700" />
+            <h3 className="text-sm font-bold text-slate-900">Institutional Leadership &amp; Endorsement Authority</h3>
+          </div>
+          <p className="text-xs text-slate-500">
+            Official details for the head of institution. Displayed on student terminal progress reports, transcripts, and formal documentation.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Principal / Headteacher Full Name</label>
+              <input
+                type="text"
+                placeholder="e.g., Dr. Kwame Mensah"
+                value={formData.principalName || ''}
+                onChange={e => setFormData({ ...formData, principalName: e.target.value })}
+                className="w-full px-3 py-2 text-xs font-medium border border-slate-200 bg-slate-50/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Institutional Title</label>
+              <select
+                value={formData.principalTitle || 'Head of Institution'}
+                onChange={e => setFormData({ ...formData, principalTitle: e.target.value })}
+                className="w-full px-3 py-2 text-xs font-medium border border-slate-200 bg-slate-50/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
+              >
+                <option value="Headteacher">Headteacher</option>
+                <option value="Principal">Principal</option>
+                <option value="Headmaster">Headmaster</option>
+                <option value="Headmistress">Headmistress</option>
+                <option value="Head of Institution">Head of Institution</option>
+                <option value="Rector">Rector</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Principal Official Contact Phone</label>
+              <input
+                type="tel"
+                placeholder="e.g., +233 24 123 4567"
+                value={formData.principalPhone || ''}
+                onChange={e => setFormData({ ...formData, principalPhone: e.target.value })}
+                className="w-full px-3 py-2 text-xs font-mono border border-slate-200 bg-slate-50/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Official Payment Channels (Bank & Mobile Money) */}
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <CreditCard className="w-4 h-4 text-teal-700" />
+            <h3 className="text-sm font-bold text-slate-900">Official School Payment Channels (Bank &amp; Mobile Money)</h3>
+          </div>
+          <p className="text-xs text-slate-500">
+            Official account information where parents and guardians are authorized to deposit or transfer student fees. Never auto-generated; displayed only when explicitly saved here.
+          </p>
+
+          {/* Bank Details */}
+          <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200 space-y-3">
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Official Bank Account Information</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Bank Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g., GCB Bank, Ecobank, Stanbic"
+                  value={formData.bankName || ''}
+                  onChange={e => setFormData({ ...formData, bankName: e.target.value })}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Account Name</label>
+                <input
+                  type="text"
+                  placeholder="Official Account Name"
+                  value={formData.bankAccountName || ''}
+                  onChange={e => setFormData({ ...formData, bankAccountName: e.target.value })}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Account Number</label>
+                <input
+                  type="text"
+                  placeholder="e.g., 1081130092812"
+                  value={formData.bankAccountNumber || ''}
+                  onChange={e => setFormData({ ...formData, bankAccountNumber: e.target.value })}
+                  className="w-full px-3 py-2 text-xs font-mono font-bold border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Bank Branch</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Main Branch / Ring Road"
+                  value={formData.bankBranch || ''}
+                  onChange={e => setFormData({ ...formData, bankBranch: e.target.value })}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Money Details */}
+          <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200 space-y-3">
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Official Mobile Money Account Information</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Mobile Money Provider</label>
+                <select
+                  value={formData.momoProvider || 'MTN Mobile Money'}
+                  onChange={e => setFormData({ ...formData, momoProvider: e.target.value })}
+                  className="w-full px-3 py-2 text-xs font-medium border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                >
+                  <option value="MTN Mobile Money">MTN Mobile Money</option>
+                  <option value="Telecel Cash">Telecel Cash</option>
+                  <option value="AT Money">AT Money (AirtelTigo)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">MoMo Merchant / Wallet Number</label>
+                <input
+                  type="text"
+                  placeholder="e.g., 0244123456"
+                  value={formData.momoNumber || ''}
+                  onChange={e => setFormData({ ...formData, momoNumber: e.target.value })}
+                  className="w-full px-3 py-2 text-xs font-mono font-bold border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">MoMo Registered Account Name</label>
+                <input
+                  type="text"
+                  placeholder="Official Merchant / Wallet Name"
+                  value={formData.momoAccountName || ''}
+                  onChange={e => setFormData({ ...formData, momoAccountName: e.target.value })}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">Official Fee Settlement Instructions</label>
+              <textarea
+                rows={2}
+                placeholder="e.g., Please enter student full name or admission number as reference. Retain SMS confirmation receipt."
+                value={formData.paymentInstructions || ''}
+                onChange={e => setFormData({ ...formData, paymentInstructions: e.target.value })}
+                className="w-full px-3 py-2 text-xs border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
               />
             </div>
           </div>

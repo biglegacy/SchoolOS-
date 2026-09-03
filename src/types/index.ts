@@ -85,6 +85,20 @@ export interface School {
   communicationSenderType?: 'sms' | 'whatsapp' | 'both';
   communicationEnabled?: boolean;
   approvedSenderId?: string; // Provider-approved alphanumeric sender ID (max 11 chars)
+  // Official School Payment Channels & Bank Information (Saved by School Admin)
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+  bankBranch?: string;
+  momoNumber?: string;
+  momoAccountName?: string;
+  momoProvider?: string; // e.g. 'MTN Mobile Money' | 'Telecel Cash' | 'AirtelTigo Money'
+  paymentInstructions?: string;
+  // Official Institutional Leadership
+  principalName?: string;
+  principalPhone?: string;
+  principalTitle?: string; // 'Headteacher' | 'Principal' | 'Headmistress' | 'Headmaster'
+  principalSignatureUrl?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -127,14 +141,18 @@ export interface Student {
   otherNames?: string;
   dateOfBirth: string;
   gender: 'male' | 'female';
-  ghanaCardNumber?: string; // GHA-XXXXXXXXX-X
   currentClassroomId: string;
   classroomName: string;
   level: string; // "Primary 4", "JHS 2", "Basic 3", etc.
+  feesAmount?: number; // Fees Amount (GHS ₵) applicable for student registration/billing
+  academicYear?: string;
+  term?: string;
   admissionDate: string;
   status: 'active' | 'withdrawn' | 'graduated' | 'suspended';
   photoUrl?: string;
   guardians: Guardian[];
+  parentId?: string; // Primary linked parent/guardian user ID
+  parentIds?: string[]; // Array of linked parent/guardian user account IDs
   medicalConditions?: string;
   allergies?: string;
   emergencyContact?: {
@@ -142,6 +160,8 @@ export interface Student {
     phone: string;
   };
   houseOrTeam?: string;
+  promotionStatus?: 'PROMOTED' | 'NOT PROMOTED' | 'PROMOTED ON TRIAL' | 'PENDING' | 'GRADUATED';
+  nextClass?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -180,7 +200,6 @@ export interface Teacher {
   email: string;
   phone: string;
   gender?: 'male' | 'female';
-  ghanaCardNumber?: string;
   qualification: string;
   specialization?: string;
   dateJoined?: string;
@@ -385,12 +404,22 @@ export interface FeePayment {
   createdAt?: string;
 }
 
+export type FeePaymentStatus = 'Paid' | 'Partially Paid' | 'Unpaid' | 'Overpaid';
+
 export interface StudentFeeSummary {
   studentId: string;
   studentName: string;
   admissionNumber: string;
   classroomId?: string;
   classroomName: string;
+  academicYear?: string;
+  term?: string;
+  // Official standard fields
+  amountToBePaid: number; // Total fee assigned to the student for the selected term/academic year
+  amountPaid: number;     // Total amount the student has actually paid
+  amountOwing: number;    // Automatically calculated as Amount to Be Paid - Amount Paid
+  paymentStatus: FeePaymentStatus; // 'Paid' | 'Partially Paid' | 'Unpaid' | 'Overpaid'
+  // Backward compatibility aliases
   totalBilled: number;
   totalPaid: number;
   balance: number;
@@ -630,6 +659,25 @@ export interface CommunicationLog {
   providerResponse?: string;
   costGHS?: number;
   timestamp: string;
+  academicYear?: string;
+  term?: string;
+  createdBy?: string;
+  arkeselResponse?: any;
+}
+
+export interface SmsMessage {
+  id: string;
+  schoolId: string;
+  recipient: string;
+  sender: string;
+  message: string;
+  status: 'delivered' | 'failed' | 'pending';
+  costGHS: number;
+  arkeselResponse?: any;
+  createdAt: string;
+  createdBy?: string;
+  academicYear?: string;
+  term?: string;
 }
 
 export interface SendCommunicationParams {

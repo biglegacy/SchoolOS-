@@ -30,12 +30,14 @@ import {
 } from 'lucide-react';
 
 export const SchoolOwnerPortalsView: React.FC = () => {
-  const { school, schoolUsers, students, teachers, createUserAccount, updateUserAccount, deleteUserAccount } = useSchool();
+  const { school, schoolUsers, students, allSchoolStudents, teachers, createUserAccount, updateUserAccount, deleteUserAccount, repairParentStudentLinks } = useSchool();
   const { currentUser } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+
+  const availableStudents = allSchoolStudents || students;
 
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -44,7 +46,21 @@ export const SchoolOwnerPortalsView: React.FC = () => {
   const [newPasswordValue, setNewPasswordValue] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRepairing, setIsRepairing] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+
+  const handleRepairLinks = async () => {
+    if (!repairParentStudentLinks) return;
+    setIsRepairing(true);
+    try {
+      const res = await repairParentStudentLinks();
+      showToast(`Repaired parent links: ${res.parentsUpdated} parents & ${res.studentsUpdated} students validated.`);
+    } catch (err: any) {
+      alert(`Error repairing parent links: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsRepairing(false);
+    }
+  };
 
   // Form State for new portal creation
   const [formData, setFormData] = useState<{
@@ -396,6 +412,29 @@ export const SchoolOwnerPortalsView: React.FC = () => {
         </div>
       </div>
 
+      {/* Parent Link Integrity Banner (shown when parent filter selected) */}
+      {roleFilter === 'parent' && (
+        <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="space-y-0.5">
+            <div className="font-bold text-teal-950 flex items-center gap-1.5">
+              <Check className="w-4 h-4 text-teal-600" />
+              <span>Strict Parent–Student Relationship Enforcement</span>
+            </div>
+            <p className="text-[11px] text-teal-700 max-w-2xl">
+              Parents only have access to students explicitly assigned to their account. If you need to clean up legacy associations or audit student links, run validation.
+            </p>
+          </div>
+          <button
+            onClick={handleRepairLinks}
+            disabled={isRepairing}
+            className="px-3.5 py-2 bg-white hover:bg-teal-50 border border-teal-300 text-teal-900 font-bold rounded-xl transition-all flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${isRepairing ? 'animate-spin' : ''}`} />
+            <span>{isRepairing ? 'Validating...' : 'Validate & Repair Links'}</span>
+          </button>
+        </div>
+      )}
+
       {/* Users Table */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         {filteredUsers.length === 0 ? (
@@ -688,7 +727,12 @@ export const SchoolOwnerPortalsView: React.FC = () => {
 
               {formData.role === 'parent' && (
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Link Student Wards</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 text-xs">Link Student Wards</label>
+                    <span className="text-[10px] text-teal-700 font-semibold">
+                      {formData.linkedStudentIds.length} Student(s) Selected
+                    </span>
+                  </div>
                   <select
                     multiple
                     size={3}
@@ -699,11 +743,11 @@ export const SchoolOwnerPortalsView: React.FC = () => {
                     }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-teal-600"
                   >
-                    {students.map(s => (
-                      <option key={s.id} value={s.id}>{s.firstName} {s.lastName} ({s.admissionNumber})</option>
+                    {availableStudents.map(s => (
+                      <option key={s.id} value={s.id}>{s.firstName} {s.lastName} ({s.admissionNumber || s.classroomName})</option>
                     ))}
                   </select>
-                  <p className="text-[10px] text-slate-400 mt-1">Hold Ctrl/Cmd to select multiple students linked to this parent.</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Hold Ctrl/Cmd to select multiple students explicitly linked to this parent.</p>
                 </div>
               )}
 
@@ -845,6 +889,60 @@ export const SchoolOwnerPortalsView: React.FC = () => {
                   <option value="schoolOwner">School Owner</option>
                 </select>
               </div>
+
+              {editingUser.role === 'parent' && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block font-bold text-slate-700 text-xs">
+                      Linked Student Wards
+                    </label>
+                    <span className="text-[10px] text-teal-700 font-semibold">
+                      {editingUser.linkedStudentIds?.length || 0} Student(s) Assigned
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Select the specific student(s) this parent account is authorized to view in the Parent Portal.
+                  </p>
+                  <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50 space-y-1">
+                    {availableStudents.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">No students registered in this school.</p>
+                    ) : (
+                      availableStudents.map(st => {
+                        const isAssigned = (editingUser.linkedStudentIds || []).includes(st.id);
+                        return (
+                          <label
+                            key={st.id}
+                            className={`flex items-center justify-between p-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                              isAssigned
+                                ? 'bg-teal-50 border-teal-300 text-teal-950 font-semibold'
+                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isAssigned}
+                                onChange={(e) => {
+                                  const current = editingUser.linkedStudentIds || [];
+                                  const updated = e.target.checked
+                                    ? [...current, st.id]
+                                    : current.filter(id => id !== st.id);
+                                  setEditingUser({ ...editingUser, linkedStudentIds: updated });
+                                }}
+                                className="w-3.5 h-3.5 text-teal-600 rounded"
+                              />
+                              <span>{st.firstName} {st.lastName}</span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              {st.admissionNumber || st.classroomName}
+                            </span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <span className="font-bold text-slate-800">Account Active</span>

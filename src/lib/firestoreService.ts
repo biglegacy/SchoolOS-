@@ -30,6 +30,7 @@ import {
   SubscriptionTier,
   PlatformCommunicationSettings,
   CommunicationLog,
+  SmsMessage,
   SubscriptionTransaction,
   PaystackPlatformConfig,
   PaystackInitializeParams,
@@ -83,6 +84,7 @@ export const COLLECTIONS = {
   MESSAGES: 'messages',
   AUDIT_LOGS: 'auditLogs',
   COMMUNICATION_LOGS: 'communicationLogs',
+  SMS_MESSAGES: 'smsMessages',
   SCHOOL_SETTINGS: 'schoolSettings',
   PLATFORM_SETTINGS: 'platformSettings',
   SUBSCRIPTION_TRANSACTIONS: 'subscriptionTransactions',
@@ -759,8 +761,18 @@ export async function fsDeleteCommunicationLog(logId: string): Promise<void> {
   if (!db) return;
   try {
     await deleteDoc(doc(db, COLLECTIONS.COMMUNICATION_LOGS, logId));
+    await deleteDoc(doc(db, COLLECTIONS.SMS_MESSAGES, logId)).catch(() => {});
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `/${COLLECTIONS.COMMUNICATION_LOGS}/${logId}`);
+  }
+}
+
+export async function fsAddSmsMessage(sms: SmsMessage): Promise<void> {
+  if (!db) return;
+  try {
+    await setDoc(doc(db, COLLECTIONS.SMS_MESSAGES, sms.id), sanitizeForFirestore(sms));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `/${COLLECTIONS.SMS_MESSAGES}/${sms.id}`);
   }
 }
 

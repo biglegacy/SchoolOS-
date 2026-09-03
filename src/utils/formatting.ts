@@ -22,17 +22,6 @@ export const formatGhanaPhone = (phone: string): string => {
   return phone;
 };
 
-export const formatGhanaCard = (card: string): string => {
-  if (!card) return '';
-  const uppercase = card.toUpperCase().trim();
-  if (uppercase.startsWith('GHA-')) return uppercase;
-  const digitsOnly = uppercase.replace(/[^A-Z0-9]/g, '');
-  if (digitsOnly.length >= 9) {
-    return `GHA-${digitsOnly.slice(0, 9)}-${digitsOnly.slice(9, 10) || '1'}`;
-  }
-  return uppercase;
-};
-
 export const formatDate = (dateString: string | undefined | null): string => {
   if (!dateString) return '—';
   try {

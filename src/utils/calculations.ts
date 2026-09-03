@@ -112,3 +112,66 @@ export const generateHeadTeacherRemark = (average: number, promoted: boolean, ne
   if (average >= 70) return 'Impressive work. An asset to the school community.';
   return 'Adequate term work. Expected to work harder next academic term.';
 };
+
+export type FeePaymentStatus = 'Paid' | 'Partially Paid' | 'Unpaid' | 'Overpaid';
+
+export interface StudentFeeCalculation {
+  amountToBePaid: number;
+  amountPaid: number;
+  amountOwing: number;
+  paymentStatus: FeePaymentStatus;
+  statusCode: 'paid' | 'partial' | 'unpaid' | 'overpaid';
+}
+
+/**
+ * Calculates fee balances and payment status automatically.
+ * Amount Owing is strictly calculated as: Amount to Be Paid - Amount Paid.
+ * It is never entered manually.
+ * 
+ * Payment Status:
+ * - Paid: Balance is ₵0.00 (amountPaid >= amountToBePaid when amountToBePaid > 0)
+ * - Partially Paid: Some amount has been paid (amountPaid > 0) but a balance remains (amountOwing > 0)
+ * - Unpaid: Nothing has been paid (amountPaid === 0)
+ */
+export const calculateStudentFeeBalance = (
+  amountToBePaid: number = 0,
+  amountPaid: number = 0
+): StudentFeeCalculation => {
+  const safeToBePaid = Math.max(0, Number(amountToBePaid) || 0);
+  const safePaid = Math.max(0, Number(amountPaid) || 0);
+  const amountOwing = Math.max(0, safeToBePaid - safePaid);
+
+  let paymentStatus: FeePaymentStatus = 'Unpaid';
+  let statusCode: 'paid' | 'partial' | 'unpaid' | 'overpaid' = 'unpaid';
+
+  if (safeToBePaid > 0) {
+    if (safePaid >= safeToBePaid) {
+      paymentStatus = safePaid > safeToBePaid ? 'Overpaid' : 'Paid';
+      statusCode = safePaid > safeToBePaid ? 'overpaid' : 'paid';
+    } else if (safePaid > 0) {
+      paymentStatus = 'Partially Paid';
+      statusCode = 'partial';
+    } else {
+      paymentStatus = 'Unpaid';
+      statusCode = 'unpaid';
+    }
+  } else {
+    // If no fee assigned yet
+    if (safePaid > 0) {
+      paymentStatus = 'Paid';
+      statusCode = 'paid';
+    } else {
+      paymentStatus = 'Paid';
+      statusCode = 'paid';
+    }
+  }
+
+  return {
+    amountToBePaid: safeToBePaid,
+    amountPaid: safePaid,
+    amountOwing,
+    paymentStatus,
+    statusCode
+  };
+};
+

@@ -21,7 +21,7 @@ import {
   X
 } from 'lucide-react';
 import { Modal } from '../common/Modal';
-import { formatDate, formatGhanaCard, formatGhanaPhone } from '../../utils/formatting';
+import { formatDate, formatGhanaPhone } from '../../utils/formatting';
 
 export const TeacherManagementView: React.FC = () => {
   const { teachers, classrooms, subjects, addTeacher, updateTeacher } = useSchool();
@@ -41,7 +41,6 @@ export const TeacherManagementView: React.FC = () => {
     email: '',
     phone: '',
     staffId: '',
-    ghanaCardNumber: '',
     qualification: '',
     specialization: '',
     assignedClassroomId: '',
@@ -83,7 +82,6 @@ export const TeacherManagementView: React.FC = () => {
       lastName: formData.lastName.trim(),
       email: formData.email.trim(),
       phone: formData.phone.trim(),
-      ghanaCardNumber: formData.ghanaCardNumber ? formatGhanaCard(formData.ghanaCardNumber) : undefined,
       qualification: formData.qualification.trim() || 'Teacher Certificate',
       specialization: formData.specialization.trim() || 'General Subject Instructor',
       assignedClassroomId: selectedClass?.id,
@@ -105,7 +103,6 @@ export const TeacherManagementView: React.FC = () => {
       email: '',
       phone: '',
       staffId: '',
-      ghanaCardNumber: '',
       qualification: '',
       specialization: '',
       assignedClassroomId: '',
@@ -584,19 +581,6 @@ export const TeacherManagementView: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Ghana Card (GHA-XXXXXXXXX-X)</label>
-              <input
-                type="text"
-                placeholder="GHA-123456789-0"
-                value={formData.ghanaCardNumber}
-                onChange={e => setFormData({ ...formData, ghanaCardNumber: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono uppercase"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">Academic Qualification *</label>
               <input
                 type="text"
@@ -604,6 +588,20 @@ export const TeacherManagementView: React.FC = () => {
                 placeholder="e.g. B.Ed Mathematics, Diploma in Basic Education"
                 value={formData.qualification}
                 onChange={e => setFormData({ ...formData, qualification: e.target.value })}
+                className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Subject Specialization *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Core Mathematics & Computing"
+                value={formData.specialization}
+                onChange={e => setFormData({ ...formData, specialization: e.target.value })}
                 className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>

@@ -76,8 +76,8 @@ export const SchoolSubscriptionPaymentView: React.FC = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const email = currentUser?.email || school?.email || 'admin@school.edu.gh';
-    const phone = currentUser?.phone || school?.phone || '0240000000';
+    const email = currentUser?.email || school?.email || '';
+    const phone = currentUser?.phone || school?.phone || '';
 
     try {
       // 1. Authoritative Backend Initialization (Amounts are looked up server-side)
@@ -103,7 +103,7 @@ export const SchoolSubscriptionPaymentView: React.FC = () => {
           ref: initResult.reference,
           metadata: {
             custom_fields: [
-              { display_name: 'School Name', variable_name: 'school_name', value: school?.name || 'School' },
+              { display_name: 'School Name', variable_name: 'school_name', value: school?.name || '' },
               { display_name: 'Tier', variable_name: 'tier', value: currentPlan.name },
               { display_name: 'Term', variable_name: 'term', value: currentTerm }
             ]

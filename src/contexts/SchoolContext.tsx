@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { 
   School, 
   Student, 
@@ -40,7 +40,7 @@ import {
 import { loadInitialDatabase, saveDatabase, DatabaseState, resetDatabaseToSeed } from '../lib/storageService';
 import { checkFeatureAccess, INITIAL_PLANS, INITIAL_PLATFORM_COMMUNICATION, INITIAL_PAYSTACK_CONFIG, INITIAL_SUBSCRIPTION_TRANSACTIONS } from '../lib/mockData';
 import { useAuth } from './AuthContext';
-import { calculateGhanaGrade, calculatePositions, generateTeacherRemark, generateHeadTeacherRemark } from '../utils/calculations';
+import { calculateGhanaGrade, calculatePositions, generateTeacherRemark, generateHeadTeacherRemark, calculateStudentFeeBalance } from '../utils/calculations';
 import {
   sendCentralCommunication,
   triggerFeePaymentNotification,
@@ -100,6 +100,7 @@ interface SchoolContextType {
   
   // Entities filtered by active school
   students: Student[];
+  allSchoolStudents: Student[];
   teachers: Teacher[];
   classrooms: Classroom[];
   subjects: Subject[];
@@ -129,6 +130,9 @@ interface SchoolContextType {
   addStudent: (student: Omit<Student, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>) => Promise<Student>;
   updateStudent: (id: string, data: Partial<Student>) => Promise<void>;
   deleteStudent: (id: string) => Promise<void>;
+  linkStudentToParent: (studentId: string, parentId: string) => Promise<void>;
+  unlinkStudentFromParent: (studentId: string, parentId: string) => Promise<void>;
+  repairParentStudentLinks: () => Promise<{ repairedParents: number; repairedStudents: number; details: string[] }>;
 
   // Teacher Actions
   addTeacher: (teacher: Omit<Teacher, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>) => Promise<Teacher>;
@@ -244,7 +248,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   };
 
-  const activeSchoolId = currentSchool?.id || 'school_achimota_01';
+  const activeSchoolId = currentSchool?.id || '';
 
   const logAction = (action: string, details: string, targetSchoolId?: string): AuditLog => {
     const newLog: AuditLog = {
@@ -263,17 +267,80 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return newLog;
   };
 
-  // Filtered entity sets for the active school (multi-tenancy)
+  // Determine if the active logged-in user is a Parent
+  const isParent = currentUser?.role === 'parent';
+
+  // Explicit parent linked student IDs (from user profile linkedStudentIds AND student parentIds array matching this parent)
+  const parentLinkedStudentIds = useMemo(() => {
+    if (!isParent || !currentUser) return new Set<string>();
+    const ids = new Set<string>();
+    (currentUser.linkedStudentIds || []).forEach(id => {
+      if (id) ids.add(id);
+    });
+    // Check students for this school where parentId or parentIds array includes current user ID
+    dbState.students.forEach(s => {
+      if (s.schoolId === activeSchoolId) {
+        if (s.parentId === currentUser.id || (s.parentIds && s.parentIds.includes(currentUser.id))) {
+          ids.add(s.id);
+        }
+      }
+    });
+    return ids;
+  }, [isParent, currentUser, dbState.students, activeSchoolId]);
+
+  // All students belonging to the active school (for administrative / staff queries)
+  const allSchoolStudents = useMemo(() => {
+    return dbState.students.filter(s => s.schoolId === activeSchoolId);
+  }, [dbState.students, activeSchoolId]);
+
+  // Filtered entity sets for the active school & role
   const school = dbState.schools.find(s => s.id === activeSchoolId) || dbState.schools[0] || null;
-  const students = dbState.students.filter(s => s.schoolId === activeSchoolId);
+
+  // The role-scoped students list:
+  // IF Parent: ONLY return students explicitly linked to this parent in this school. If none are linked, return [] (never return all school students!)
+  // IF Admin / Staff / SuperAdmin: return all school students.
+  const students = useMemo(() => {
+    if (isParent) {
+      return dbState.students.filter(s => s.schoolId === activeSchoolId && parentLinkedStudentIds.has(s.id));
+    }
+    return allSchoolStudents;
+  }, [isParent, dbState.students, activeSchoolId, parentLinkedStudentIds, allSchoolStudents]);
+
   const teachers = dbState.teachers.filter(t => t.schoolId === activeSchoolId);
   const classrooms = dbState.classrooms.filter(c => c.schoolId === activeSchoolId);
-  const subjects = dbState.subjects.filter(sub => sub.schoolId === activeSchoolId || sub.schoolId === 'school_achimota_01');
-  const attendance = dbState.attendance.filter(a => a.schoolId === activeSchoolId);
+  const subjects = dbState.subjects.filter(sub => activeSchoolId ? sub.schoolId === activeSchoolId : false);
+
+  // Attendance: Parent only sees attendance records for their linked wards
+  const attendance = useMemo(() => {
+    const schoolAttendance = dbState.attendance.filter(a => a.schoolId === activeSchoolId);
+    if (isParent) {
+      return schoolAttendance.filter(a => parentLinkedStudentIds.has(a.studentId));
+    }
+    return schoolAttendance;
+  }, [isParent, dbState.attendance, activeSchoolId, parentLinkedStudentIds]);
+
   const examinations = dbState.examinations.filter(e => e.schoolId === activeSchoolId);
-  const results = dbState.results.filter(r => r.schoolId === activeSchoolId);
+
+  // Results: Parent only sees results for their linked wards
+  const results = useMemo(() => {
+    const schoolResults = dbState.results.filter(r => r.schoolId === activeSchoolId);
+    if (isParent) {
+      return schoolResults.filter(r => parentLinkedStudentIds.has(r.studentId));
+    }
+    return schoolResults;
+  }, [isParent, dbState.results, activeSchoolId, parentLinkedStudentIds]);
+
   const feeStructures = dbState.feeStructures.filter(f => f.schoolId === activeSchoolId);
-  const feePayments = dbState.feePayments.filter(p => p.schoolId === activeSchoolId);
+
+  // Fee Payments: Parent only sees fee payment receipts for their linked wards
+  const feePayments = useMemo(() => {
+    const schoolPayments = dbState.feePayments.filter(p => p.schoolId === activeSchoolId);
+    if (isParent) {
+      return schoolPayments.filter(p => parentLinkedStudentIds.has(p.studentId));
+    }
+    return schoolPayments;
+  }, [isParent, dbState.feePayments, activeSchoolId, parentLinkedStudentIds]);
+
   const storeItems = dbState.storeItems.filter(i => i.schoolId === activeSchoolId);
   const posTransactions = dbState.posTransactions.filter(p => p.schoolId === activeSchoolId);
   const messages = dbState.messages.filter(m => m.schoolId === activeSchoolId);
@@ -295,65 +362,260 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       { grade: 'E', minScore: 45, maxScore: 49, remark: 'Weak Pass' },
       { grade: 'F', minScore: 0, maxScore: 44, remark: 'Fail' }
     ],
-    receiptHeader: `${school?.name || 'SchoolOS Academy'}\nP.O. Box ${school?.district || 'Accra'}, Ghana\nTel: ${school?.phone || '+233 24 000 0000'}`,
-    receiptFooter: 'Thank you for choosing excellence in education.\nReceipt valid upon official stamp.',
-    reopeningDate: '2026-09-08',
-    vacationDate: '2026-08-29',
+    receiptHeader: [
+      school?.name,
+      school?.address,
+      school?.district ? `${school.district} District` : '',
+      school?.phone ? `Tel: ${school.phone}` : ''
+    ].filter(Boolean).join('\n'),
+    receiptFooter: 'Official school receipt. Valid upon institutional endorsement.',
+    reopeningDate: school?.currentAcademicYear ? '' : '',
+    vacationDate: '',
   };
 
   const settings = dbState.settings[activeSchoolId] || defaultSettings;
 
-  // Student CRUD
+  // Student CRUD with bidirectional Parent-Student relationship sync
   const addStudent = async (studentData: Omit<Student, 'id' | 'schoolId' | 'createdAt' | 'updatedAt'>): Promise<Student> => {
     const newId = `student_${Date.now()}`;
+    const targetParentIds = Array.isArray(studentData.parentIds) 
+      ? studentData.parentIds.filter(Boolean)
+      : (studentData.parentId ? [studentData.parentId] : []);
+
     const newStudent: Student = {
       ...studentData,
       id: newId,
       schoolId: activeSchoolId,
+      parentId: targetParentIds[0] || undefined,
+      parentIds: targetParentIds,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     updateStateAndPersist(prev => {
       const log = logAction('ENROLL_STUDENT', `Enrolled new student ${newStudent.firstName} ${newStudent.lastName} (${newStudent.admissionNumber}) into ${newStudent.classroomName}`);
+      
+      // Update linkedStudentIds on assigned parent user accounts
+      const updatedUsers = prev.users.map(u => {
+        if (targetParentIds.includes(u.id)) {
+          const currentLinks = u.linkedStudentIds || [];
+          if (!currentLinks.includes(newId)) {
+            return { ...u, linkedStudentIds: [...currentLinks, newId] };
+          }
+        }
+        return u;
+      });
+
       return {
         ...prev,
         students: [newStudent, ...prev.students],
+        users: updatedUsers,
         auditLogs: [log, ...prev.auditLogs]
       };
     });
 
     await fsAddStudent(newStudent);
+
+    // Sync Firestore parent user records
+    for (const pId of targetParentIds) {
+      const parentUser = dbState.users.find(u => u.id === pId);
+      if (parentUser) {
+        const nextLinks = Array.from(new Set([...(parentUser.linkedStudentIds || []), newId]));
+        await fsUpdateUser(pId, { linkedStudentIds: nextLinks });
+      }
+    }
+
     return newStudent;
   };
 
   const updateStudent = async (id: string, data: Partial<Student>) => {
+    const targetParentIds = data.parentIds !== undefined 
+      ? data.parentIds.filter(Boolean) 
+      : (data.parentId !== undefined ? (data.parentId ? [data.parentId] : []) : undefined);
+
     updateStateAndPersist(prev => {
-      const updatedStudents = prev.students.map(s => s.id === id ? { ...s, ...data, updatedAt: new Date().toISOString() } : s);
       const target = prev.students.find(s => s.id === id);
+      const oldParentIds = target?.parentIds || (target?.parentId ? [target.parentId] : []);
+      const newParentIds = targetParentIds !== undefined ? targetParentIds : oldParentIds;
+
+      const updatedStudent: Student = {
+        ...(target || ({} as Student)),
+        ...data,
+        parentId: newParentIds[0] || undefined,
+        parentIds: newParentIds,
+        updatedAt: new Date().toISOString()
+      };
+
+      const updatedStudents = prev.students.map(s => s.id === id ? updatedStudent : s);
       const log = logAction('UPDATE_STUDENT', `Updated profile of student ${target?.firstName || ''} ${target?.lastName || id}`);
+
+      // Sync parent user records if parentIds were modified
+      let updatedUsers = prev.users;
+      if (targetParentIds !== undefined) {
+        updatedUsers = prev.users.map(u => {
+          if (u.role === 'parent' && u.schoolId === activeSchoolId) {
+            const currentLinks = u.linkedStudentIds || [];
+            if (newParentIds.includes(u.id)) {
+              if (!currentLinks.includes(id)) {
+                return { ...u, linkedStudentIds: [...currentLinks, id] };
+              }
+            } else if (oldParentIds.includes(u.id) && !newParentIds.includes(u.id)) {
+              return { ...u, linkedStudentIds: currentLinks.filter(sId => sId !== id) };
+            }
+          }
+          return u;
+        });
+      }
+
       return {
         ...prev,
         students: updatedStudents,
+        users: updatedUsers,
         auditLogs: [log, ...prev.auditLogs]
       };
     });
 
-    await fsUpdateStudent(id, data);
+    await fsUpdateStudent(id, {
+      ...data,
+      parentId: targetParentIds ? (targetParentIds[0] || undefined) : data.parentId,
+      parentIds: targetParentIds
+    });
+
+    // Sync Firestore parent users if parentIds were modified
+    if (targetParentIds !== undefined) {
+      const currentStudent = dbState.students.find(s => s.id === id);
+      const oldParentIds = currentStudent?.parentIds || (currentStudent?.parentId ? [currentStudent.parentId] : []);
+      
+      // Update newly linked parents
+      for (const pId of targetParentIds) {
+        const parentUser = dbState.users.find(u => u.id === pId);
+        if (parentUser) {
+          const nextLinks = Array.from(new Set([...(parentUser.linkedStudentIds || []), id]));
+          await fsUpdateUser(pId, { linkedStudentIds: nextLinks });
+        }
+      }
+      // Clean unlinked parents
+      for (const oldPId of oldParentIds) {
+        if (!targetParentIds.includes(oldPId)) {
+          const parentUser = dbState.users.find(u => u.id === oldPId);
+          if (parentUser && parentUser.linkedStudentIds) {
+            const nextLinks = parentUser.linkedStudentIds.filter(sId => sId !== id);
+            await fsUpdateUser(oldPId, { linkedStudentIds: nextLinks });
+          }
+        }
+      }
+    }
   };
 
   const deleteStudent = async (id: string) => {
     updateStateAndPersist(prev => {
       const target = prev.students.find(s => s.id === id);
       const log = logAction('WITHDRAW_STUDENT', `Withdrew student record ${target?.firstName} ${target?.lastName} (${target?.admissionNumber})`);
+      
+      // Remove student from any linked parents
+      const updatedUsers = prev.users.map(u => {
+        if (u.role === 'parent' && u.linkedStudentIds?.includes(id)) {
+          return { ...u, linkedStudentIds: u.linkedStudentIds.filter(sId => sId !== id) };
+        }
+        return u;
+      });
+
       return {
         ...prev,
         students: prev.students.filter(s => s.id !== id),
+        users: updatedUsers,
         auditLogs: [log, ...prev.auditLogs]
       };
     });
 
     await fsDeleteStudent(id);
+  };
+
+  const linkStudentToParent = async (studentId: string, parentId: string) => {
+    const student = dbState.students.find(s => s.id === studentId);
+    const parent = dbState.users.find(u => u.id === parentId);
+    if (!student || !parent) return;
+
+    const currentParents = student.parentIds || (student.parentId ? [student.parentId] : []);
+    const nextStudentParents = Array.from(new Set([...currentParents, parentId]));
+    const nextParentStudents = Array.from(new Set([...(parent.linkedStudentIds || []), studentId]));
+
+    await updateStudent(studentId, { parentId: nextStudentParents[0], parentIds: nextStudentParents });
+    await updateUserAccount(parentId, { linkedStudentIds: nextParentStudents });
+  };
+
+  const unlinkStudentFromParent = async (studentId: string, parentId: string) => {
+    const student = dbState.students.find(s => s.id === studentId);
+    const parent = dbState.users.find(u => u.id === parentId);
+    if (!student || !parent) return;
+
+    const currentParents = student.parentIds || (student.parentId ? [student.parentId] : []);
+    const nextStudentParents = currentParents.filter(id => id !== parentId);
+    const nextParentStudents = (parent.linkedStudentIds || []).filter(id => id !== studentId);
+
+    await updateStudent(studentId, { parentId: nextStudentParents[0] || undefined, parentIds: nextStudentParents });
+    await updateUserAccount(parentId, { linkedStudentIds: nextParentStudents });
+  };
+
+  // Safe migration and repair mechanism for parent-student relationships
+  const repairParentStudentLinks = async (): Promise<{ repairedParents: number; repairedStudents: number; details: string[] }> => {
+    let repairedParentsCount = 0;
+    let repairedStudentsCount = 0;
+    const details: string[] = [];
+
+    updateStateAndPersist(prev => {
+      const schoolStudents = prev.students.filter(s => s.schoolId === activeSchoolId);
+      const validStudentIds = new Set(schoolStudents.map(s => s.id));
+
+      // 1. Audit and clean up parent user records
+      const updatedUsers = prev.users.map(u => {
+        if (u.role === 'parent' && u.schoolId === activeSchoolId) {
+          const rawLinks = u.linkedStudentIds || [];
+          const validLinks = rawLinks.filter(sId => validStudentIds.has(sId));
+          if (validLinks.length !== rawLinks.length) {
+            repairedParentsCount++;
+            details.push(`Cleaned unverified linked student IDs for parent ${u.fullName} (${u.email})`);
+            return { ...u, linkedStudentIds: validLinks };
+          }
+        }
+        return u;
+      });
+
+      // 2. Audit and clean up student records
+      const parentUserIds = new Set(updatedUsers.filter(u => u.role === 'parent' && u.schoolId === activeSchoolId).map(u => u.id));
+      const updatedStudents = prev.students.map(s => {
+        if (s.schoolId === activeSchoolId) {
+          const rawParents = s.parentIds || (s.parentId ? [s.parentId] : []);
+          const validParents = rawParents.filter(pId => parentUserIds.has(pId));
+          if (validParents.length !== rawParents.length || (s.parentId && !validParents.includes(s.parentId))) {
+            repairedStudentsCount++;
+            details.push(`Corrected parent references on student ${s.firstName} ${s.lastName} (${s.admissionNumber})`);
+            return {
+              ...s,
+              parentId: validParents[0] || undefined,
+              parentIds: validParents,
+              updatedAt: new Date().toISOString()
+            };
+          }
+        }
+        return s;
+      });
+
+      const log = logAction('REPAIR_PARENT_STUDENT_LINKS', `Repaired parent-student relationships: ${repairedParentsCount} parents and ${repairedStudentsCount} students cleaned.`);
+
+      return {
+        ...prev,
+        users: updatedUsers,
+        students: updatedStudents,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    return {
+      repairedParents: repairedParentsCount,
+      repairedStudents: repairedStudentsCount,
+      details
+    };
   };
 
   // Teacher CRUD
@@ -781,32 +1043,34 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const getStudentFeeSummaries = (): StudentFeeSummary[] => {
     return students.map(student => {
-      const applicableFee = feeStructures.find(f => f.classroomId === student.currentClassroomId);
-      const totalBilled = applicableFee ? applicableFee.totalAmount : 0;
+      const applicableFee = feeStructures.find(f => f.classroomId === student.currentClassroomId) || feeStructures.find(f => !f.classroomId);
+      // Priority: If student has custom/entered feesAmount during registration/profile, use that. Otherwise use classroom fee structure total.
+      const amountToBePaid = (typeof student.feesAmount === 'number' && !isNaN(student.feesAmount) && student.feesAmount >= 0)
+        ? student.feesAmount
+        : (applicableFee ? applicableFee.totalAmount : 0);
       
       const payments = (feePayments || []).filter(p => p.studentId === student.id);
-      const totalPaid = (payments || []).reduce((acc, curr) => acc + (curr?.amount || 0), 0);
-      const balance = totalBilled - totalPaid;
-
-      let status: 'paid' | 'partial' | 'unpaid' | 'overpaid' = 'unpaid';
-      if (totalBilled > 0) {
-        if (balance <= 0 && totalPaid > 0) status = balance < 0 ? 'overpaid' : 'paid';
-        else if (totalPaid > 0 && balance > 0) status = 'partial';
-        else status = 'unpaid';
-      } else {
-        status = totalPaid > 0 ? 'paid' : 'unpaid';
-      }
+      const amountPaid = (payments || []).reduce((acc, curr) => acc + (curr?.amount || 0), 0);
+      
+      const calc = calculateStudentFeeBalance(amountToBePaid, amountPaid);
 
       return {
         studentId: student.id,
-        studentName: `${student.firstName} ${student.lastName}`,
+        studentName: `${student.firstName} ${student.lastName} ${student.otherNames || ''}`.trim(),
         admissionNumber: student.admissionNumber,
+        classroomId: student.currentClassroomId,
         classroomName: student.classroomName,
-        totalBilled,
-        totalPaid,
-        balance,
-        status,
-        lastPaymentDate: payments[0]?.date,
+        academicYear: student.academicYear || applicableFee?.academicYear || school?.currentAcademicYear || '2026/2027',
+        term: student.term || applicableFee?.term || school?.currentTerm || 'Term 3',
+        amountToBePaid: calc.amountToBePaid,
+        amountPaid: calc.amountPaid,
+        amountOwing: calc.amountOwing,
+        paymentStatus: calc.paymentStatus,
+        totalBilled: calc.amountToBePaid,
+        totalPaid: calc.amountPaid,
+        balance: calc.amountOwing,
+        status: calc.statusCode,
+        lastPaymentDate: payments[0]?.paymentDate || payments[0]?.date,
       };
     });
   };
@@ -1184,51 +1448,184 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   };
 
-  // User Accounts Management
+  // User Accounts Management with Parent-Student relationship sync
   const createUserAccount = async (userData: Omit<UserProfile, 'id' | 'uid' | 'createdAt'>, initialPassword?: string): Promise<UserProfile> => {
     const newId = `user_${Date.now()}`;
+    const selectedStudentIds = (userData.role === 'parent' && Array.isArray(userData.linkedStudentIds))
+      ? userData.linkedStudentIds.filter(Boolean)
+      : [];
+
     const newUser: UserProfile = {
       ...userData,
       id: newId,
       uid: `auth_${newId}`,
       password: initialPassword || userData.password || 'password123',
+      linkedStudentIds: userData.role === 'parent' ? selectedStudentIds : undefined,
       createdAt: new Date().toISOString(),
     };
+
     updateStateAndPersist(prev => {
-      const log = logAction('CREATE_USER_PORTAL_ACCOUNT', `Created portal account for ${newUser.fullName} (${newUser.role}) at ${school?.name || activeSchoolId}`);
+      const log = logAction('CREATE_USER_PORTAL_ACCOUNT', `Created portal account for ${newUser.fullName} (${newUser.role}) with ${selectedStudentIds.length} linked student(s)`);
+      
+      // Update parentIds on assigned students
+      let updatedStudents = prev.students;
+      if (userData.role === 'parent' && selectedStudentIds.length > 0) {
+        updatedStudents = prev.students.map(s => {
+          if (selectedStudentIds.includes(s.id) && s.schoolId === (userData.schoolId || activeSchoolId)) {
+            const currentParents = s.parentIds || (s.parentId ? [s.parentId] : []);
+            if (!currentParents.includes(newId)) {
+              return {
+                ...s,
+                parentId: currentParents[0] || newId,
+                parentIds: [...currentParents, newId],
+                updatedAt: new Date().toISOString()
+              };
+            }
+          }
+          return s;
+        });
+      }
+
       return {
         ...prev,
         users: [newUser, ...prev.users],
+        students: updatedStudents,
         auditLogs: [log, ...prev.auditLogs]
       };
     });
 
     await fsCreateUser(newUser);
+
+    // Sync Firestore students
+    if (userData.role === 'parent' && selectedStudentIds.length > 0) {
+      for (const sId of selectedStudentIds) {
+        const student = dbState.students.find(s => s.id === sId);
+        if (student) {
+          const currentParents = student.parentIds || (student.parentId ? [student.parentId] : []);
+          const nextParents = Array.from(new Set([...currentParents, newId]));
+          await fsUpdateStudent(sId, { parentId: nextParents[0], parentIds: nextParents });
+        }
+      }
+    }
+
     return newUser;
   };
 
   const updateUserAccount = async (id: string, data: Partial<UserProfile>) => {
     updateStateAndPersist(prev => {
-      const updatedUsers = prev.users.map(u => u.id === id ? { ...u, ...data } : u);
+      const targetUser = prev.users.find(u => u.id === id);
+      const isParentUser = (data.role || targetUser?.role) === 'parent';
+      const oldLinkedIds = targetUser?.linkedStudentIds || [];
+      const newLinkedIds = (isParentUser && data.linkedStudentIds !== undefined) 
+        ? data.linkedStudentIds.filter(Boolean) 
+        : oldLinkedIds;
+
+      const updatedUser: UserProfile = {
+        ...(targetUser || ({} as UserProfile)),
+        ...data,
+        linkedStudentIds: isParentUser ? newLinkedIds : undefined,
+      };
+
+      const updatedUsers = prev.users.map(u => u.id === id ? updatedUser : u);
       const log = logAction('UPDATE_USER_PORTAL_ACCOUNT', `Updated profile credentials for user account ${id}`);
+
+      // Sync affected students' parentIds
+      let updatedStudents = prev.students;
+      if (isParentUser && data.linkedStudentIds !== undefined) {
+        updatedStudents = prev.students.map(s => {
+          if (s.schoolId === (updatedUser.schoolId || activeSchoolId)) {
+            const currentParents = s.parentIds || (s.parentId ? [s.parentId] : []);
+            if (newLinkedIds.includes(s.id)) {
+              if (!currentParents.includes(id)) {
+                return {
+                  ...s,
+                  parentId: currentParents[0] || id,
+                  parentIds: [...currentParents, id],
+                  updatedAt: new Date().toISOString()
+                };
+              }
+            } else if (oldLinkedIds.includes(s.id) && !newLinkedIds.includes(s.id)) {
+              const nextParents = currentParents.filter(pId => pId !== id);
+              return {
+                ...s,
+                parentId: nextParents[0] || undefined,
+                parentIds: nextParents,
+                updatedAt: new Date().toISOString()
+              };
+            }
+          }
+          return s;
+        });
+      }
+
       return {
         ...prev,
         users: updatedUsers,
+        students: updatedStudents,
         auditLogs: [log, ...prev.auditLogs]
       };
     });
 
     await fsUpdateUser(id, data);
+
+    // Sync Firestore student records if linkedStudentIds were modified
+    if (data.linkedStudentIds !== undefined) {
+      const targetUser = dbState.users.find(u => u.id === id);
+      const oldLinkedIds = targetUser?.linkedStudentIds || [];
+      const newLinkedIds = data.linkedStudentIds.filter(Boolean);
+
+      // Add parent to newly linked students
+      for (const sId of newLinkedIds) {
+        const student = dbState.students.find(s => s.id === sId);
+        if (student) {
+          const currentParents = student.parentIds || (student.parentId ? [student.parentId] : []);
+          const nextParents = Array.from(new Set([...currentParents, id]));
+          await fsUpdateStudent(sId, { parentId: nextParents[0], parentIds: nextParents });
+        }
+      }
+      // Remove parent from unlinked students
+      for (const oldSId of oldLinkedIds) {
+        if (!newLinkedIds.includes(oldSId)) {
+          const student = dbState.students.find(s => s.id === oldSId);
+          if (student && (student.parentIds || student.parentId)) {
+            const currentParents = student.parentIds || (student.parentId ? [student.parentId] : []);
+            const nextParents = currentParents.filter(pId => pId !== id);
+            await fsUpdateStudent(oldSId, { parentId: nextParents[0] || undefined, parentIds: nextParents });
+          }
+        }
+      }
+    }
   };
 
   const deleteUserAccount = async (id: string) => {
     updateStateAndPersist(prev => {
       const target = prev.users.find(u => u.id === id);
+      const isParentUser = target?.role === 'parent';
       const updatedUsers = prev.users.filter(u => u.id !== id);
       const log = logAction('DELETE_USER_PORTAL_ACCOUNT', `Revoked portal access for ${target?.fullName || id}`);
+
+      // If parent user is deleted, remove their ID from all linked students
+      let updatedStudents = prev.students;
+      if (isParentUser) {
+        updatedStudents = prev.students.map(s => {
+          if (s.parentId === id || s.parentIds?.includes(id)) {
+            const currentParents = s.parentIds || (s.parentId ? [s.parentId] : []);
+            const nextParents = currentParents.filter(pId => pId !== id);
+            return {
+              ...s,
+              parentId: nextParents[0] || undefined,
+              parentIds: nextParents,
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return s;
+        });
+      }
+
       return {
         ...prev,
         users: updatedUsers,
+        students: updatedStudents,
         auditLogs: [log, ...prev.auditLogs]
       };
     });
@@ -1459,16 +1856,16 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     phone?: string; 
     callbackUrl?: string 
   }): Promise<PaystackInitializeResponse> => {
-    const targetSchoolId = school?.id || 'demo_school';
-    const targetSchoolName = school?.name || 'My School Institution';
+    const targetSchoolId = school?.id || '';
+    const targetSchoolName = school?.name || '';
 
     const result = await apiInitializePaystackTransaction({
       schoolId: targetSchoolId,
       schoolName: targetSchoolName,
       planId: params.planId || school?.planId || 'plan_basic',
       tierCode: params.tierCode || school?.subscriptionPlan || 'basic',
-      academicYear: params.academicYear || school?.currentAcademicYear || '2025/2026',
-      term: params.term || school?.currentTerm || 'Term 2',
+      academicYear: params.academicYear || school?.currentAcademicYear || '',
+      term: params.term || school?.currentTerm || 'Term 1',
       email: params.email,
       phone: params.phone || school?.phone,
       callbackUrl: params.callbackUrl
@@ -1586,10 +1983,10 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       await fsAddAuditLog({
         id: `audit-${Date.now()}`,
         schoolId: targetSchoolId || 'platform',
-        schoolName: school?.name || 'Institutional School',
+        schoolName: school?.name || '',
         userId: currentUser?.id || 'system',
-        userName: currentUser?.fullName || 'School Owner',
-        userEmail: currentUser?.email || 'owner@school.edu.gh',
+        userName: currentUser?.fullName || '',
+        userEmail: currentUser?.email || '',
         userRole: currentUser?.role || 'schoolOwner',
         action: 'paystack_subscription_renewed',
         details: `Successfully paid GH₵${result.amountGHS} for ${result.tierName || 'Platform'} subscription (${term}). Reference: ${reference}.`,
@@ -1639,6 +2036,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         allSchools: dbState.schools,
         plans,
         students,
+        allSchoolStudents,
         teachers,
         classrooms,
         subjects,
@@ -1666,6 +2064,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addStudent,
         updateStudent,
         deleteStudent,
+        linkStudentToParent,
+        unlinkStudentFromParent,
+        repairParentStudentLinks,
 
         addTeacher,
         updateTeacher,

@@ -18,13 +18,17 @@ import {
   MapPin,
   TrendingUp,
   Download,
-  GraduationCap
+  GraduationCap,
+  CreditCard,
+  Receipt,
+  AlertCircle
 } from 'lucide-react';
 import { TerminalReportModal } from '../reports/TerminalReportModal';
 import { formatGHS, formatDate } from '../../utils/formatting';
+import { calculateStudentFeeBalance } from '../../utils/calculations';
 
 interface StudentPortalViewProps {
-  initialSubTab?: 'overview' | 'results' | 'reports' | 'attendance' | 'timetable' | 'notices';
+  initialSubTab?: 'overview' | 'results' | 'reports' | 'fees' | 'attendance' | 'timetable' | 'notices';
 }
 
 export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
@@ -38,10 +42,12 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     results = [], 
     examResults = [], 
     attendance = [],
+    feeStructures = [],
+    feePayments = [],
     settings 
   } = useSchool();
   
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'results' | 'reports' | 'attendance' | 'timetable' | 'notices'>(initialSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'results' | 'reports' | 'fees' | 'attendance' | 'timetable' | 'notices'>(initialSubTab);
   const [isReportOpen, setIsReportOpen] = useState(false);
 
   // Match student by currentUser studentId or email/phone or first active student
@@ -51,6 +57,19 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   ) || students[0];
 
   const myClass = classrooms.find(c => c.id === me?.currentClassroomId);
+
+  // Standardized Fee Calculations for this student
+  const applicableFeeStructure = me 
+    ? feeStructures.find(f => f.classroomId === me.currentClassroomId)
+    : undefined;
+  const myFeePayments = me 
+    ? feePayments.filter(p => p.studentId === me.id)
+    : [];
+  const amountToBePaid = (me && typeof me.feesAmount === 'number' && !isNaN(me.feesAmount) && me.feesAmount >= 0)
+    ? me.feesAmount
+    : (applicableFeeStructure ? applicableFeeStructure.totalAmount : 0);
+  const amountPaid = myFeePayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+  const { amountOwing, paymentStatus } = calculateStudentFeeBalance(amountToBePaid, amountPaid);
 
   // Real assessments data for this student
   const allResults = examResults.length > 0 ? examResults : results;
@@ -113,13 +132,22 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={() => setIsReportOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
-          >
-            <FileText className="w-4 h-4 text-white" />
-            <span>Official Report Card</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveSubTab('fees')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-teal-700" />
+              <span>Fee Status ({paymentStatus})</span>
+            </button>
+            <button
+              onClick={() => setIsReportOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <FileText className="w-4 h-4 text-white" />
+              <span>Official Report Card</span>
+            </button>
+          </div>
         </div>
 
         {/* Sub-Navigation Tabs */}
@@ -128,6 +156,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             { id: 'overview', label: 'My Overview', icon: Layers },
             { id: 'results', label: 'Continuous Assessment & Exams', icon: FileSpreadsheet },
             { id: 'reports', label: 'My Terminal Report', icon: FileText },
+            { id: 'fees', label: 'My Fee Statement', icon: CreditCard },
             { id: 'attendance', label: 'My Attendance Log', icon: CalendarCheck2 },
             { id: 'timetable', label: 'Classroom Timetable', icon: Clock },
             { id: 'notices', label: 'School Notices', icon: MessageSquare },
@@ -372,7 +401,153 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
       )}
 
-      {/* 3. MY ATTENDANCE LOG SUB-TAB */}
+      {/* 3. MY FEE STATEMENT SUB-TAB */}
+      {activeSubTab === 'fees' && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="text-base font-black text-slate-900">
+                School Fees Statement & Account Ledger
+              </h3>
+              <p className="text-xs text-slate-500">
+                Official billing statement and verified receipts for <b>{me.firstName} {me.lastName}</b> ({me.admissionNumber}).
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 ${
+                paymentStatus === 'Paid' 
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                  : paymentStatus === 'Partially Paid'
+                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                  : 'bg-rose-50 text-rose-800 border-rose-200'
+              }`}>
+                <Receipt className="w-3.5 h-3.5" />
+                <span>Payment Status: <b>{paymentStatus}</b></span>
+              </span>
+            </div>
+          </div>
+
+          {/* Standard 3-Card Summary Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
+                Amount to Be Paid
+              </span>
+              <div className="text-lg font-black text-slate-900">
+                {formatGHS(amountToBePaid)}
+              </div>
+              <span className="text-[10px] text-slate-500">Assigned fee for {school?.currentTerm || 'current term'}</span>
+            </div>
+
+            <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200">
+              <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider block mb-1">
+                Amount Paid
+              </span>
+              <div className="text-lg font-black text-emerald-700">
+                {formatGHS(amountPaid)}
+              </div>
+              <span className="text-[10px] text-emerald-700">Total verified bursary payments</span>
+            </div>
+
+            <div className={`p-4 rounded-xl border ${amountOwing > 0 ? 'bg-amber-50/70 border-amber-200' : 'bg-emerald-50/60 border-emerald-200'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block mb-1 ${amountOwing > 0 ? 'text-amber-800' : 'text-emerald-800'}`}>
+                Amount Owing / Balance
+              </span>
+              <div className={`text-lg font-black ${amountOwing > 0 ? 'text-amber-600' : 'text-emerald-700'}`}>
+                {formatGHS(amountOwing)}
+              </div>
+              <span className="text-[10px] text-slate-500">
+                {amountOwing > 0 ? 'Outstanding balance' : 'Zero balance — All clear (₵0.00)'}
+              </span>
+            </div>
+          </div>
+
+          {/* Itemized Fee Structure */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+              {applicableFeeStructure?.name || 'Class Fee Schedule'} — Breakdown
+            </h4>
+
+            {applicableFeeStructure && applicableFeeStructure.items && applicableFeeStructure.items.length > 0 ? (
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-900 text-white font-bold uppercase text-[10px] tracking-wider">
+                      <th className="py-3 px-4">#</th>
+                      <th className="py-3 px-4">Item Name / Description</th>
+                      <th className="py-3 px-4 text-right">Amount (GHS)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {applicableFeeStructure.items.map((item, idx) => (
+                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
+                        <td className="py-2.5 px-4 font-mono text-slate-400">{idx + 1}</td>
+                        <td className="py-2.5 px-4 font-medium text-slate-800">{item.name}</td>
+                        <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">{formatGHS(item.amount)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-slate-100 font-bold border-t-2 border-slate-300 text-slate-900">
+                      <td colSpan={2} className="py-3 px-4 uppercase text-xs">Total Assigned Assessment</td>
+                      <td className="py-3 px-4 text-right font-mono text-sm">{formatGHS(applicableFeeStructure.totalAmount)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 text-center text-xs text-slate-500">
+                No fee schedule has been assigned to this classroom for the current academic session.
+              </div>
+            )}
+          </div>
+
+          {/* Verified Official Receipts */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+              Verified Payment Receipts
+            </h4>
+
+            {myFeePayments.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {myFeePayments.map(rec => (
+                  <div key={rec.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-xs text-slate-900">
+                          {rec.receiptNumber || rec.id}
+                        </span>
+                        <span className="text-[9.5px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                          Verified
+                        </span>
+                      </div>
+                      {(rec.transactionReference || rec.reference) && (
+                        <p className="text-[10px] font-mono text-teal-700 font-medium">
+                          Ref: {rec.transactionReference || rec.reference}
+                        </p>
+                      )}
+                      <p className="text-[11px] text-slate-500">{formatDate(rec.paymentDate || rec.date || '')} • {(rec.paymentMethod || rec.method || 'Cash').toUpperCase()}</p>
+                      <p className="text-[10px] font-mono text-slate-400">Payer: {rec.payerName || 'Guardian'}</p>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="font-mono font-black text-slate-900 text-sm">{formatGHS(rec.amount)}</div>
+                      <span className="text-[10px] text-teal-800 font-bold">
+                        Official Receipt
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 text-center text-xs text-slate-500">
+                No fee payment receipts recorded yet for this session.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 4. MY ATTENDANCE LOG SUB-TAB */}
       {activeSubTab === 'attendance' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-5">
           <div className="border-b border-slate-100 pb-3">

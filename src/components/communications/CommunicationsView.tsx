@@ -17,23 +17,25 @@ import { formatDate } from '../../utils/formatting';
 import { GhanaFlagBadge } from '../common/EmptyState';
 
 export const CommunicationsView: React.FC = () => {
-  const { students, teachers, sendSMSBroadcast, auditLogs } = useSchool();
+  const { students, teachers, sendSMSBroadcast, auditLogs, school, settings } = useSchool();
   const [recipientGroup, setRecipientGroup] = useState<SMSBroadcastRecipient>('all_parents');
-  const [senderId, setSenderId] = useState('ACHIMOTA-SCH');
+  const [senderId, setSenderId] = useState(school?.approvedSenderId || school?.shortCode || (school?.name ? school.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 11).toUpperCase() : ''));
   const [messageBody, setMessageBody] = useState('');
-  const [smsBalance, setSmsBalance] = useState(2450);
+  const [smsBalance, setSmsBalance] = useState(settings?.smsBalance ?? 0);
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState<string | null>(null);
+
+  const schoolDisplayName = school?.name || 'the school';
 
   const templates = [
     {
       title: 'Fee Payment Reminder',
-      text: 'Dear Parent/Guardian, this is a kind reminder from Achimota Model Academy to settle outstanding Term 3 school fees. Kindly make payments via MTN MoMo / Telecel Cash or at the bursary. Thank you.',
+      text: `Dear Parent/Guardian, this is a kind reminder from ${schoolDisplayName} to settle outstanding school fees. Kindly make payments at the bursary or via official school payment channels. Thank you.`,
       target: 'fee_defaulters' as SMSBroadcastRecipient,
     },
     {
       title: 'PTA General Meeting',
-      text: 'Notice: Achimota Model Academy PTA General Meeting is scheduled for Saturday 10:00 AM at the School Assembly Hall. All parents/guardians are cordially invited. Punctuality is key.',
+      text: `Notice: ${schoolDisplayName} PTA General Meeting is scheduled for Saturday 10:00 AM at the School Assembly Hall. All parents/guardians are cordially invited. Punctuality is key.`,
       target: 'all_parents' as SMSBroadcastRecipient,
     },
     {

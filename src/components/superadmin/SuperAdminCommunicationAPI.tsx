@@ -50,8 +50,8 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
   // Test API Modal State
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [testChannel, setTestChannel] = useState<'sms' | 'whatsapp'>('sms');
-  const [testRecipientPhone, setTestRecipientPhone] = useState('0244000000');
-  const [testSimulatedSchoolId, setTestSimulatedSchoolId] = useState<string>(allSchools[0]?.id || 'school_demo_01');
+  const [testRecipientPhone, setTestRecipientPhone] = useState('');
+  const [testSimulatedSchoolId, setTestSimulatedSchoolId] = useState<string>(allSchools[0]?.id || '');
   const [testMessage, setTestMessage] = useState('Central Arkesel SMS gateway connection test from SchoolOS Online.');
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{

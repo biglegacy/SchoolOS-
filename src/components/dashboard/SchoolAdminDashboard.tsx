@@ -36,7 +36,8 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ onNa
     feePayments, 
     feeStructures,
     storeItems,
-    auditLogs 
+    auditLogs,
+    getStudentFeeSummaries
   } = useSchool();
 
   // Dynamic calculations from single source of truth
@@ -51,15 +52,10 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ onNa
     ? Math.round((presentToday / todayAttendance.length) * 100) 
     : 94;
 
-  const totalFeesCollected = (feePayments || []).reduce((acc, curr) => acc + (curr?.amount || 0), 0);
-  
-  // Total expected fees
-  const totalFeesExpected = (students || []).reduce((acc, student) => {
-    const struct = (feeStructures || []).find(f => f.classroomId === student.currentClassroomId) || (feeStructures || [])[0];
-    return acc + (struct ? struct.totalAmount : 2900);
-  }, 0);
-
-  const outstandingFees = Math.max(0, totalFeesExpected - totalFeesCollected);
+  const feeSummaries = getStudentFeeSummaries();
+  const totalFeesExpected = feeSummaries.reduce((sum, s) => sum + s.amountToBePaid, 0);
+  const totalFeesCollected = feeSummaries.reduce((sum, s) => sum + s.amountPaid, 0);
+  const outstandingFees = feeSummaries.reduce((sum, s) => sum + s.amountOwing, 0);
 
   // Store low stock alerts
   const lowStockItems = (storeItems || []).filter(item => item.currentStock <= item.reorderLevel);
