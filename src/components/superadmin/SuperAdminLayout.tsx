@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { SchoolOSLogo } from '../common/SchoolOSLogo';
 import { 
   LayoutDashboard, 
   Building2, 
@@ -243,13 +244,11 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
         <div className="h-16 px-3.5 border-b border-slate-200 flex items-center justify-between">
           {!isCollapsed ? (
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-teal-800 text-white font-black text-sm flex items-center justify-center shadow-xs shrink-0">
-                OS
-              </div>
+              <SchoolOSLogo size="sm" />
               <div className="min-w-0 leading-tight">
                 <div className="font-bold text-sm text-slate-900 tracking-tight flex items-center gap-1.5">
                   <span>SchoolOS</span>
-                  <span className="bg-teal-100 text-teal-800 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border border-teal-200">
+                  <span className="bg-green-100 text-green-800 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border border-green-200">
                     ROOT
                   </span>
                 </div>
@@ -259,9 +258,7 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
               </div>
             </div>
           ) : (
-            <div className="w-8 h-8 mx-auto rounded-xl bg-teal-800 text-white font-black text-sm flex items-center justify-center shadow-xs">
-              OS
-            </div>
+            <SchoolOSLogo size="sm" className="mx-auto" />
           )}
 
           <button
@@ -316,9 +313,7 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
           >
             <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-teal-800 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-xs">
-                  OS
-                </div>
+                <SchoolOSLogo size="sm" />
                 <div>
                   <div className="text-xs font-bold text-slate-900 leading-tight">SchoolOS</div>
                   <div className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider">Super Admin</div>

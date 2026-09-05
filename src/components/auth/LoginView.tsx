@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { SchoolOSLogo } from '../common/SchoolOSLogo';
 import { 
   Building2, 
   Lock, 
@@ -55,12 +56,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onOpenRegister }) => {
         
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-teal-700 rounded-2xl text-white font-black text-2xl shadow-md shadow-teal-700/20 mx-auto">
-            OS
-          </div>
+          <SchoolOSLogo size="xl" roundedClassName="rounded-2xl" className="mx-auto shadow-md" />
           <div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">SchoolOS</h1>
-            <p className="text-xs font-semibold text-teal-700 uppercase tracking-wider">Online Education Cloud</p>
+            <p className="text-xs font-semibold text-green-700 uppercase tracking-wider">Online Education Cloud</p>
           </div>
         </div>
 

@@ -3,6 +3,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSchool } from '../../contexts/SchoolContext';
 import { Calendar, CheckCircle2, AlertCircle, Building2, LogOut, ShieldCheck, User, Menu, X } from 'lucide-react';
 import { GhanaFlagBadge } from './EmptyState';
+import { SchoolOSLogo } from './SchoolOSLogo';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   onOpenSchoolRegistration?: () => void;
@@ -65,9 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {currentUser?.role === 'superAdmin' ? (
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-teal-700 rounded-xl flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-xs shrink-0">
-              OS
-            </div>
+            <SchoolOSLogo size="md" />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <h1 className="text-xs font-bold text-slate-900 tracking-tight uppercase truncate">SchoolOS</h1>
@@ -125,6 +125,9 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+
+        {/* PWA In-App Install Button */}
+        <PWAInstallButton />
 
         {/* User Profile Card */}
         <div className="flex items-center gap-2">

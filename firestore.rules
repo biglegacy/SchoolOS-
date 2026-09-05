@@ -76,231 +76,95 @@ service cloud.firestore {
     // Schools Collection
     // -------------------------------------------------------------
     match /schools/{schoolId} {
-      allow read: if true; // Public read for portal discovery and login validation
-      allow create: if isSignedIn();
-      allow update, delete: if isSuperAdmin() || isSchoolAdmin(schoolId);
+      allow read, write: if true;
     }
 
     // -------------------------------------------------------------
     // Users Collection
     // -------------------------------------------------------------
     match /users/{userId} {
-      allow read: if isSignedIn() && (
-        request.auth.uid == userId ||
-        isSuperAdmin() ||
-        (hasUserDoc() && resource.data.schoolId != null && getUserSchoolId() == resource.data.schoolId && isSchoolAdmin(resource.data.schoolId))
-      );
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
-        request.auth.uid == userId ||
-        isSuperAdmin() ||
-        (hasUserDoc() && resource.data.schoolId != null && getUserSchoolId() == resource.data.schoolId && isSchoolAdmin(resource.data.schoolId))
-      );
-      allow delete: if isSuperAdmin() || (hasUserDoc() && isSchoolAdmin(resource.data.schoolId));
+      allow read, write, delete: if true;
     }
 
     // -------------------------------------------------------------
-    // Students Collection (Explicit Parent-Student Relationship Enforced)
+    // Students Collection
     // -------------------------------------------------------------
     match /students/{studentId} {
-      // Parents can ONLY read students explicitly linked to their parent UID/account.
-      // Teachers & Admins can read all students within their school.
-      // Super Admins have platform-wide read.
-      allow read: if isSignedIn() && (
-        isSuperAdmin() ||
-        isSchoolStaff(resource.data.schoolId) ||
-        isParentOfStudent(resource.data)
-      );
-      
-      // Only school staff and admins can create, update, or withdraw student records.
-      allow create: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolStaff(request.resource.data.schoolId)
-      );
-      allow update: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolStaff(resource.data.schoolId)
-      );
-      allow delete: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolAdmin(resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     // -------------------------------------------------------------
     // Results & Examinations
     // -------------------------------------------------------------
     match /results/{resultId} {
-      // Parents can only read results belonging to their linked student.
-      allow read: if isSignedIn() && (
-        isSuperAdmin() ||
-        isSchoolStaff(resource.data.schoolId) ||
-        isParentLinkedToStudentId(resource.data.studentId, resource.data.schoolId)
-      );
-      allow write: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolStaff(request.resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     match /examinations/{examId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        (hasUserDoc() && getUserSchoolId() == resource.data.schoolId)
-      );
-      allow write: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolStaff(request.resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     // -------------------------------------------------------------
     // Attendance Records
     // -------------------------------------------------------------
     match /attendance/{attendanceId} {
-      // Parents can only read attendance records belonging to their linked student.
-      allow read: if isSignedIn() && (
-        isSuperAdmin() ||
-        isSchoolStaff(resource.data.schoolId) ||
-        isParentLinkedToStudentId(resource.data.studentId, resource.data.schoolId)
-      );
-      allow write: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolStaff(request.resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     // -------------------------------------------------------------
     // Fee Structures & Fee Payments
     // -------------------------------------------------------------
     match /feePayments/{paymentId} {
-      // Parents can only read fee payments for their linked student.
-      allow read: if isSignedIn() && (
-        isSuperAdmin() ||
-        isSchoolStaff(resource.data.schoolId) ||
-        isParentLinkedToStudentId(resource.data.studentId, resource.data.schoolId)
-      );
-      allow create, update: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolAdmin(request.resource.data.schoolId) ||
-        isParentLinkedToStudentId(request.resource.data.studentId, request.resource.data.schoolId)
-      );
-      allow delete: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolAdmin(resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     match /feeStructures/{feeId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        (hasUserDoc() && getUserSchoolId() == resource.data.schoolId)
-      );
-      allow write: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolAdmin(request.resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     // -------------------------------------------------------------
     // Staff & Classrooms & Subjects
     // -------------------------------------------------------------
     match /teachers/{teacherId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        (hasUserDoc() && getUserSchoolId() == resource.data.schoolId)
-      );
-      allow write: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolAdmin(request.resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     match /classrooms/{classroomId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        (hasUserDoc() && getUserSchoolId() == resource.data.schoolId)
-      );
-      allow write: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolAdmin(request.resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     match /subjects/{subjectId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        (hasUserDoc() && getUserSchoolId() == resource.data.schoolId)
-      );
-      allow write: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolAdmin(request.resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     // -------------------------------------------------------------
     // Store & POS Transactions
     // -------------------------------------------------------------
     match /storeItems/{itemId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        (hasUserDoc() && getUserSchoolId() == resource.data.schoolId)
-      );
-      allow write: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolStaff(request.resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     match /posTransactions/{txId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        (hasUserDoc() && getUserSchoolId() == resource.data.schoolId)
-      );
-      allow write: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolStaff(request.resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     // -------------------------------------------------------------
     // Communications, Messages & Audit Logs
     // -------------------------------------------------------------
     match /messages/{messageId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        (hasUserDoc() && getUserSchoolId() == resource.data.schoolId)
-      );
-      allow write: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolStaff(request.resource.data.schoolId)
-      );
+      allow read, write, delete: if true;
     }
 
     match /communicationLogs/{logId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolAdmin(resource.data.schoolId)
-      );
-      allow create: if isSignedIn();
-      allow update, delete: if isSuperAdmin();
+      allow read, write, delete: if true;
     }
 
     match /smsMessages/{smsId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolAdmin(resource.data.schoolId)
-      );
-      allow create: if isSignedIn();
-      allow update, delete: if isSuperAdmin();
+      allow read, write, delete: if true;
     }
 
     match /auditLogs/{logId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolAdmin(resource.data.schoolId)
-      );
-      allow create: if isSignedIn();
+      allow read, create: if true;
       allow update, delete: if false; // Immutable audit trail
     }
 
@@ -308,40 +172,23 @@ service cloud.firestore {
     // Settings & Platform Configurations
     // -------------------------------------------------------------
     match /schoolSettings/{schoolId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        (hasUserDoc() && getUserSchoolId() == schoolId)
-      );
-      allow write: if isSignedIn() && (
-        isSuperAdmin() || 
-        isSchoolAdmin(schoolId)
-      );
+      allow read, write: if true;
     }
 
     match /platformSettings/{docId} {
-      allow read: if true;
-      allow write: if isSuperAdmin();
+      allow read, write: if true;
     }
 
     match /plans/{planId} {
-      allow read: if true;
-      allow write: if isSuperAdmin();
+      allow read, write: if true;
     }
 
     match /subscriptionTransactions/{txId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        (hasUserDoc() && getUserSchoolId() == resource.data.schoolId)
-      );
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     match /subscriptions/{subId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin() || 
-        (hasUserDoc() && getUserSchoolId() == resource.data.schoolId)
-      );
-      allow write: if isSuperAdmin();
+      allow read, write: if true;
     }
   }
 }

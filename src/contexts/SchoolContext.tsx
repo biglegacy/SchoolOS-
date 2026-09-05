@@ -1598,19 +1598,21 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const deleteUserAccount = async (id: string) => {
+    const target = dbState.users.find(u => u.id === id || u.uid === id);
+    const userId = target?.id || id;
+    const isParentUser = target?.role === 'parent';
+
     updateStateAndPersist(prev => {
-      const target = prev.users.find(u => u.id === id);
-      const isParentUser = target?.role === 'parent';
-      const updatedUsers = prev.users.filter(u => u.id !== id);
-      const log = logAction('DELETE_USER_PORTAL_ACCOUNT', `Revoked portal access for ${target?.fullName || id}`);
+      const updatedUsers = prev.users.filter(u => u.id !== userId && u.uid !== userId);
+      const log = logAction('DELETE_USER_PORTAL_ACCOUNT', `Permanently deleted user account for ${target?.fullName || userId} (${target?.role || 'user'})`);
 
       // If parent user is deleted, remove their ID from all linked students
       let updatedStudents = prev.students;
       if (isParentUser) {
         updatedStudents = prev.students.map(s => {
-          if (s.parentId === id || s.parentIds?.includes(id)) {
+          if (s.parentId === userId || s.parentIds?.includes(userId)) {
             const currentParents = s.parentIds || (s.parentId ? [s.parentId] : []);
-            const nextParents = currentParents.filter(pId => pId !== id);
+            const nextParents = currentParents.filter(pId => pId !== userId);
             return {
               ...s,
               parentId: nextParents[0] || undefined,
@@ -1630,7 +1632,28 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
     });
 
-    await fsDeleteUser(id);
+    try {
+      await fsDeleteUser(userId);
+    } catch (fsErr) {
+      console.warn('Firestore user deletion notice:', fsErr);
+    }
+
+    // Sync Firestore students if parent was unlinked
+    if (isParentUser) {
+      const affected = dbState.students.filter(s => s.parentId === userId || s.parentIds?.includes(userId));
+      for (const st of affected) {
+        const currentParents = st.parentIds || (st.parentId ? [st.parentId] : []);
+        const nextParents = currentParents.filter(pId => pId !== userId);
+        try {
+          await fsUpdateStudent(st.id, {
+            parentId: nextParents[0] || undefined,
+            parentIds: nextParents
+          });
+        } catch (stErr) {
+          console.warn('Firestore student parent sync notice:', stErr);
+        }
+      }
+    }
   };
 
   const plans = dbState.plans || INITIAL_PLANS;

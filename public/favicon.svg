@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f766e" />
+      <stop offset="100%" stop-color="#064e3b" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#grad)" />
+  
+  <!-- Graduation Cap -->
+  <polygon points="256,120 400,192 256,264 112,192" fill="#ffffff" />
+  <path d="M168,220 L168,296 C168,340 207,376 256,376 C305,376 344,340 344,296 L344,220 L256,264 Z" fill="#e6fffa" opacity="0.95" />
+  <path d="M380,202 L380,310 C380,316 376,322 370,322 C364,322 360,316 360,310 L360,202 Z" fill="#5eead4" />
+  <circle cx="370" cy="328" r="14" fill="#2dd4bf" />
+</svg>

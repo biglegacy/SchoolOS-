@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
+import { getAuth, Auth, signInAnonymously } from 'firebase/auth';
 import { initializeFirestore, getFirestore, Firestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import firebaseConfigJson from '../../firebase-applet-config.json';
@@ -70,6 +70,13 @@ try {
   }
   authInstance = getAuth(app);
   storageInstance = getStorage(app);
+
+  if (authInstance && !authInstance.currentUser) {
+    signInAnonymously(authInstance).catch((err) => {
+      // Handled gracefully if anonymous auth is not configured in console
+      console.info("Anonymous Firebase auth session notice:", err?.code || err?.message || err);
+    });
+  }
 } catch (err) {
   console.warn("Firebase initialization notice:", err);
 }
