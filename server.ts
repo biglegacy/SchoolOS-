@@ -1,7 +1,15 @@
 import express from 'express';
 import path from 'path';
 import crypto from 'crypto';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
+import { 
+  sendArkeselSMS, 
+  checkArkeselBalance, 
+  sanitizeSenderId, 
+  extractArkeselErrorMessage 
+} from './src/lib/arkeselService';
+import { normalizeGhanaPhoneNumber } from './src/lib/phoneNormalizer';
 
 // Server-side in-memory cache for central platform settings
 let platformSmsConfig = {
@@ -105,95 +113,27 @@ const AUTHORITATIVE_TIER_PRICING: Record<string, { name: string; priceGHS: numbe
   premium: { name: 'PREMIUM', priceGHS: 850, description: 'Complete enterprise suite with priority SMS' },
 };
 
-// Helper: dispatch Arkesel SMS internally
+// Helper: dispatch Arkesel SMS internally using unified service
 async function sendArkeselSMSInternal(recipient: string, message: string, senderOverride?: string, schoolName?: string): Promise<{ success: boolean; error?: string; logId?: string }> {
   if (!platformSmsConfig.apiKey || !platformSmsConfig.isActive) {
     console.log('[Arkesel SMS Internal] Skipped (API Key not configured or disabled)');
     return { success: false, error: 'SMS Gateway inactive or missing API Key' };
   }
 
-  const formattedRecipient = formatRecipientForArkesel(recipient);
-  if (!formattedRecipient) return { success: false, error: 'Invalid recipient phone' };
+  const result = await sendArkeselSMS({
+    apiKey: platformSmsConfig.apiKey,
+    apiUrl: platformSmsConfig.apiUrl,
+    sender: senderOverride || platformSmsConfig.senderId || 'SCHOOLOS',
+    recipient,
+    message,
+    schoolName
+  });
 
-  const sender = sanitizeSenderId(senderOverride || platformSmsConfig.senderId || 'SCHOOLOS');
-  let finalMsg = message.trim();
-  if (schoolName && !finalMsg.toLowerCase().includes(schoolName.toLowerCase())) {
-    finalMsg = `[${schoolName}] ${finalMsg}`;
-  }
-
-  try {
-    const response = await fetch(platformSmsConfig.apiUrl || 'https://sms.arkesel.com/api/v2/sms/send', {
-      method: 'POST',
-      headers: {
-        'api-key': platformSmsConfig.apiKey,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        sender: sender,
-        message: finalMsg,
-        recipients: [formattedRecipient]
-      })
-    });
-
-    const isOk = response.ok;
-    const logId = `COMM-SYS-${Date.now()}`;
-    return { success: isOk, logId };
-  } catch (err: any) {
-    console.error('[Arkesel SMS Internal Error]:', err?.message);
-    return { success: false, error: err?.message };
-  }
-}
-
-// Clean and format recipient phone numbers for Ghana (e.g., 0244123456 -> 233244123456 or +233244123456)
-function formatRecipientForArkesel(phone: string): string {
-  if (!phone) return '';
-  const cleaned = phone.replace(/[^0-9]/g, '');
-  if (cleaned.startsWith('233') && cleaned.length === 12) {
-    return cleaned;
-  }
-  if (cleaned.startsWith('0') && cleaned.length === 10) {
-    return `233${cleaned.slice(1)}`;
-  }
-  return cleaned;
-}
-
-// Sanitization of alphanumeric Sender ID (Arkesel accepts max 11 alphanumeric characters)
-function sanitizeSenderId(senderId: string): string {
-  if (!senderId) return 'SCHOOLOS';
-  const cleaned = senderId.replace(/[^a-zA-Z0-9]/g, '').trim();
-  return (cleaned.slice(0, 11) || 'SCHOOLOS').toUpperCase();
-}
-
-// Extract rich, descriptive user-facing error message from Arkesel responses
-function extractArkeselErrorMessage(statusCode: number, rawJson: any, responseText: string): string {
-  if (rawJson?.message) {
-    let msg = typeof rawJson.message === 'string' ? rawJson.message : JSON.stringify(rawJson.message);
-    if (rawJson.errors && typeof rawJson.errors === 'object') {
-      const fieldErrors = Object.values(rawJson.errors).flat().join(', ');
-      if (fieldErrors) msg += `: ${fieldErrors}`;
-    }
-    return msg;
-  }
-  if (rawJson?.error) {
-    return typeof rawJson.error === 'string' ? rawJson.error : JSON.stringify(rawJson.error);
-  }
-  if (statusCode === 401 || statusCode === 403) {
-    return 'Arkesel authentication failed. Invalid API Key or unregistered Sender ID.';
-  }
-  if (statusCode === 402) {
-    return 'Insufficient SMS balance on Arkesel gateway account.';
-  }
-  if (statusCode === 422) {
-    return 'Validation failed: Invalid recipient phone number or unregistered Sender ID.';
-  }
-  if (statusCode >= 500) {
-    return `Arkesel Gateway service unavailable (HTTP ${statusCode}). Upstream gateway server failure.`;
-  }
-  if (!responseText || !responseText.trim()) {
-    return `Arkesel Gateway returned empty response body (HTTP ${statusCode}).`;
-  }
-  return `Arkesel Gateway returned HTTP ${statusCode}`;
+  return {
+    success: result.success,
+    error: result.errorDetails,
+    logId: result.logId
+  };
 }
 
 async function startServer() {
@@ -852,7 +792,9 @@ async function startServer() {
       if (provider) platformSmsConfig.provider = provider;
       if (apiKey !== undefined) platformSmsConfig.apiKey = apiKey.trim();
       if (apiSecret !== undefined) platformSmsConfig.apiSecret = apiSecret.trim();
-      if (apiUrl) platformSmsConfig.apiUrl = apiUrl.trim();
+      if (apiUrl) {
+        platformSmsConfig.apiUrl = apiUrl.includes('hubtel') ? 'https://sms.arkesel.com/api/v2/sms/send' : apiUrl.trim();
+      }
       if (senderId) platformSmsConfig.senderId = senderId.trim();
       if (isActive !== undefined) platformSmsConfig.isActive = Boolean(isActive);
 
@@ -866,143 +808,133 @@ async function startServer() {
     }
   });
 
-  // Test SMS Gateway with real Arkesel API request
-  app.post('/api/communication/test-sms', async (req, res) => {
-    const {
-      apiKey: providedApiKey,
-      apiUrl: providedApiUrl,
-      senderId: providedSenderId,
-      testRecipient,
-      testMessage,
-      schoolName
-    } = req.body;
-
-    const apiKey = (providedApiKey || platformSmsConfig.apiKey || '').trim();
-    const apiUrl = (providedApiUrl || platformSmsConfig.apiUrl || 'https://sms.arkesel.com/api/v2/sms/send').trim();
-    const sender = sanitizeSenderId(providedSenderId || platformSmsConfig.senderId || 'SCHOOLOS');
-
-    if (!apiKey) {
-      return res.status(200).json({
-        success: false,
-        statusCode: 400,
-        provider: 'arkesel',
-        message: 'Validation Error: Arkesel API Key is required. Please enter your Arkesel API key in platform settings.',
-        responsePayload: { error: 'MISSING_API_KEY' },
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    if (!testRecipient || !testRecipient.trim()) {
-      return res.status(200).json({
-        success: false,
-        statusCode: 400,
-        provider: 'arkesel',
-        message: 'Validation Error: Test recipient phone number is required.',
-        responsePayload: { error: 'MISSING_RECIPIENT' },
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    const formattedRecipient = formatRecipientForArkesel(testRecipient.trim());
-    if (!formattedRecipient || formattedRecipient.length < 9) {
-      return res.status(200).json({
-        success: false,
-        statusCode: 400,
-        provider: 'arkesel',
-        message: 'Validation Error: Invalid Ghanaian phone number format. Enter e.g. 0244123456 or 233244123456.',
-        responsePayload: { error: 'INVALID_PHONE_NUMBER', raw: testRecipient },
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    const messageContent = testMessage?.trim() || 
-      `[${schoolName || 'SchoolOS'}] Central Arkesel SMS gateway connection test succeeded at ${new Date().toLocaleTimeString('en-GH')}.`;
-
+  // Test Arkesel API Key / Balance endpoint (GET https://sms.arkesel.com/api/v2/clients/balance-details)
+  app.post('/api/communication/test-key', async (req, res) => {
     try {
-      console.log(`[Arkesel SMS Test] Connecting to ${apiUrl} with Sender: "${sender}", Recipient: "${formattedRecipient}"...`);
-      
-      const payload = {
-        sender: sender,
-        message: messageContent,
-        recipients: [formattedRecipient]
-      };
+      const { apiKey: providedApiKey, apiUrl: providedApiUrl } = req.body || {};
+      const apiKey = (providedApiKey || platformSmsConfig.apiKey || '').trim();
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'api-key': apiKey,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(12000)
-      });
-
-      const statusCode = response.status;
-      const responseText = await response.text();
-      let rawJson: any = null;
-
-      try {
-        rawJson = responseText && responseText.trim() ? JSON.parse(responseText) : null;
-      } catch {
-        rawJson = { rawResponse: responseText };
-      }
-
-      console.log(`[Arkesel SMS Test Raw Response] HTTP ${statusCode}:`, responseText ? responseText.slice(0, 500) : '<empty body>');
-
-      // Evaluate success according to Arkesel API v2 specifications
-      const isSuccess = response.ok && (
-        rawJson?.status === 'success' ||
-        rawJson?.code === 1000 ||
-        rawJson?.code === 1001 ||
-        rawJson?.status === 200 ||
-        rawJson?.message?.toLowerCase()?.includes('success') ||
-        rawJson?.message?.toLowerCase()?.includes('saved') ||
-        rawJson?.data !== undefined
-      );
-
-      if (isSuccess) {
-        return res.status(200).json({
-          success: true,
-          statusCode: statusCode || 200,
-          provider: 'arkesel',
-          message: `Arkesel Gateway Connected: SMS accepted by Arkesel and routed to ${formattedRecipient}.`,
-          responsePayload: {
-            status: 'success',
-            arkeselResponse: rawJson,
-            recipient: formattedRecipient,
-            sender: sender,
-            httpStatus: statusCode
-          },
-          timestamp: new Date().toISOString()
-        });
-      } else {
-        const errorMsg = extractArkeselErrorMessage(statusCode, rawJson, responseText);
-
+      if (!apiKey) {
         return res.status(200).json({
           success: false,
-          statusCode: statusCode,
+          statusCode: 400,
           provider: 'arkesel',
-          message: errorMsg,
-          responsePayload: {
-            status: 'failed',
-            arkeselResponse: rawJson || { rawBody: responseText },
-            httpStatus: statusCode
-          },
+          message: 'Validation Error: Arkesel API Key is required. Please enter your Arkesel API key in platform settings.',
+          responsePayload: { error: 'MISSING_API_KEY' },
           timestamp: new Date().toISOString()
         });
       }
+
+      const balanceResult = await checkArkeselBalance(apiKey, providedApiUrl || 'https://sms.arkesel.com/api/v2/clients/balance-details');
+      return res.status(200).json({
+        success: balanceResult.success,
+        statusCode: balanceResult.statusCode,
+        provider: 'arkesel',
+        message: balanceResult.message,
+        responsePayload: {
+          balance: balanceResult.balance,
+          mainBalance: balanceResult.mainBalance,
+          rawResponse: balanceResult.rawResponse
+        },
+        timestamp: new Date().toISOString()
+      });
     } catch (err: any) {
-      console.error('[Arkesel Gateway Network/Timeout Error]:', err);
-      const isTimeout = err?.name === 'TimeoutError' || err?.message?.includes('timeout') || err?.message?.includes('aborted');
       return res.status(200).json({
         success: false,
-        statusCode: isTimeout ? 504 : 502,
+        statusCode: 500,
         provider: 'arkesel',
-        message: isTimeout
-          ? 'Arkesel SMS Gateway connection timed out after 12 seconds. Upstream gateway did not respond in time.'
-          : `Network Error: Could not connect to Arkesel SMS gateway: ${err?.message || 'Connection failed'}`,
-        responsePayload: { error: err?.message || 'NETWORK_ERROR', isTimeout },
+        message: `Server Error: ${err?.message || 'Failed to verify Arkesel key'}`,
+        responsePayload: { error: err?.message },
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Test SMS Gateway with real Arkesel API request
+  app.post('/api/communication/test-sms', async (req, res) => {
+    try {
+      const {
+        apiKey: providedApiKey,
+        apiUrl: providedApiUrl,
+        senderId: providedSenderId,
+        testRecipient,
+        testMessage,
+        schoolName
+      } = req.body || {};
+
+      const apiKey = (providedApiKey || platformSmsConfig.apiKey || '').trim();
+      const apiUrl = (providedApiUrl || platformSmsConfig.apiUrl || 'https://sms.arkesel.com/api/v2/sms/send').trim();
+      const sender = sanitizeSenderId(providedSenderId || platformSmsConfig.senderId || 'SCHOOLOS');
+
+      if (!apiKey) {
+        return res.status(200).json({
+          success: false,
+          statusCode: 400,
+          provider: 'arkesel',
+          message: 'Validation Error: Arkesel API Key is required. Please enter your Arkesel API key in platform settings.',
+          responsePayload: { error: 'MISSING_API_KEY' },
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      if (!testRecipient || typeof testRecipient !== 'string' || !testRecipient.trim()) {
+        return res.status(200).json({
+          success: false,
+          statusCode: 400,
+          provider: 'arkesel',
+          message: 'Validation Error: Test recipient phone number is required.',
+          responsePayload: { error: 'MISSING_RECIPIENT' },
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      const phoneResult = normalizeGhanaPhoneNumber(testRecipient.trim());
+      if (!phoneResult.isValid || !phoneResult.formatted) {
+        return res.status(200).json({
+          success: false,
+          statusCode: 400,
+          provider: 'arkesel',
+          message: `Validation Error: ${phoneResult.error || 'Invalid Ghanaian phone number format.'}`,
+          responsePayload: { error: 'INVALID_PHONE_NUMBER', raw: testRecipient },
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      const messageContent = testMessage?.trim() || 
+        `[${schoolName || 'SchoolOS'}] Central Arkesel SMS gateway connection test succeeded at ${new Date().toLocaleTimeString('en-GH')}.`;
+
+      const sendResult = await sendArkeselSMS({
+        apiKey,
+        apiUrl,
+        sender,
+        recipient: phoneResult.formatted,
+        message: messageContent,
+        schoolName
+      });
+
+      return res.status(200).json({
+        success: sendResult.success,
+        statusCode: sendResult.statusCode,
+        provider: 'arkesel',
+        message: sendResult.message,
+        responsePayload: {
+          status: sendResult.success ? 'success' : 'failed',
+          arkeselResponse: sendResult.rawResponse,
+          recipient: sendResult.recipient,
+          sender: sendResult.sender,
+          httpStatus: sendResult.statusCode,
+          costGHS: sendResult.costGHS,
+          logId: sendResult.logId
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (err: any) {
+      return res.status(200).json({
+        success: false,
+        statusCode: 500,
+        provider: 'arkesel',
+        message: `Server Execution Error: ${err?.message || 'Failed to dispatch test SMS'}`,
+        responsePayload: { error: err?.message },
         timestamp: new Date().toISOString()
       });
     }
@@ -1010,148 +942,110 @@ async function startServer() {
 
   // Real Multi-Tenant SMS Dispatch Endpoint
   app.post('/api/communication/send-sms', async (req, res) => {
-    const {
-      schoolId,
-      schoolName,
-      approvedSenderId,
-      recipient,
-      recipientName,
-      message,
-      category,
-      relatedRecordId,
-      apiKey: clientProvidedKey
-    } = req.body;
-
-    if (!schoolId) {
-      return res.status(200).json({ 
-        success: false, 
-        status: 'failed', 
-        error: 'Multi-Tenant Error: schoolId is required' 
-      });
-    }
-
-    if (!recipient || !message) {
-      return res.status(200).json({ 
-        success: false, 
-        status: 'failed', 
-        error: 'Recipient and message are required' 
-      });
-    }
-
-    const apiKey = (clientProvidedKey || platformSmsConfig.apiKey || '').trim();
-    if (!apiKey) {
-      return res.status(200).json({ 
-        success: false,
-        status: 'failed',
-        error: 'SMS Gateway Not Configured. The Super Admin has not yet configured the Arkesel API key in platform settings.' 
-      });
-    }
-
-    if (!platformSmsConfig.isActive) {
-      return res.status(200).json({
-        success: false,
-        status: 'failed',
-        error: 'Platform SMS Gateway is currently disabled in Super Admin settings.'
-      });
-    }
-
-    const sender = sanitizeSenderId(approvedSenderId || schoolName || platformSmsConfig.senderId || 'SCHOOLOS');
-    const formattedRecipient = formatRecipientForArkesel(recipient);
-    const apiUrl = platformSmsConfig.apiUrl || 'https://sms.arkesel.com/api/v2/sms/send';
-
-    let finalMessage = message.trim();
-    if (schoolName && !finalMessage.toLowerCase().includes(schoolName.toLowerCase())) {
-      finalMessage = `${schoolName}: ${finalMessage}`;
-    }
-
-    const logId = `COMM-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-
     try {
-      console.log(`[Arkesel SMS Dispatch] Sending for "${schoolName || schoolId}" via Sender ID "${sender}" to "${formattedRecipient}"...`);
+      const {
+        schoolId,
+        schoolName,
+        approvedSenderId,
+        recipient,
+        recipientName,
+        message,
+        category,
+        relatedRecordId,
+        apiKey: clientProvidedKey
+      } = req.body || {};
 
-      const payload = {
-        sender: sender,
-        message: finalMessage,
-        recipients: [formattedRecipient]
-      };
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'api-key': apiKey,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(12000)
-      });
-
-      const statusCode = response.status;
-      const responseText = await response.text();
-      let rawJson: any = null;
-
-      try {
-        rawJson = responseText && responseText.trim() ? JSON.parse(responseText) : null;
-      } catch {
-        rawJson = { rawResponse: responseText };
+      if (!schoolId) {
+        return res.status(200).json({ 
+          success: false, 
+          status: 'failed', 
+          error: 'Multi-Tenant Error: schoolId is required' 
+        });
       }
 
-      console.log(`[Arkesel Dispatch Raw Response] HTTP ${statusCode}:`, responseText ? responseText.slice(0, 300) : '<empty body>');
-
-      const isSuccess = response.ok && (
-        rawJson?.status === 'success' ||
-        rawJson?.code === 1000 ||
-        rawJson?.code === 1001 ||
-        rawJson?.status === 200 ||
-        rawJson?.message?.toLowerCase()?.includes('success') ||
-        rawJson?.message?.toLowerCase()?.includes('saved') ||
-        rawJson?.data !== undefined
-      );
-
-      const cost = Number((Math.ceil(finalMessage.length / 160) * 0.04).toFixed(2));
-
-      if (isSuccess) {
-        return res.status(200).json({
-          success: true,
-          status: 'delivered',
-          logId,
-          provider: 'Arkesel SMS Gateway',
-          recipient: formattedRecipient,
-          senderIdentity: sender,
-          costGHS: cost,
-          arkeselResponse: rawJson,
-          providerResponse: `HTTP ${statusCode} | ${JSON.stringify(rawJson)}`,
-          timestamp: new Date().toISOString()
+      if (!recipient || !message) {
+        return res.status(200).json({ 
+          success: false, 
+          status: 'failed', 
+          error: 'Recipient and message are required' 
         });
-      } else {
-        const errorMsg = extractArkeselErrorMessage(statusCode, rawJson, responseText);
+      }
+
+      const apiKey = (clientProvidedKey || platformSmsConfig.apiKey || '').trim();
+      if (!apiKey) {
+        return res.status(200).json({ 
+          success: false, 
+          status: 'failed', 
+          error: 'SMS Gateway Not Configured. The Super Admin has not yet configured the Arkesel API key in platform settings.' 
+        });
+      }
+
+      if (!platformSmsConfig.isActive) {
         return res.status(200).json({
           success: false,
           status: 'failed',
-          logId,
+          error: 'Platform SMS Gateway is currently disabled in Super Admin settings.'
+        });
+      }
+
+      const phoneResult = normalizeGhanaPhoneNumber(recipient);
+      if (!phoneResult.isValid || !phoneResult.formatted) {
+        return res.status(200).json({
+          success: false,
+          status: 'failed',
+          error: `Invalid Ghanaian Phone Number: ${phoneResult.error || 'Must be a valid Ghanaian number formatted with +233.'}`
+        });
+      }
+
+      const sender = sanitizeSenderId(approvedSenderId || schoolName || platformSmsConfig.senderId || 'SCHOOLOS');
+      let finalMessage = String(message).trim();
+      if (schoolName && !finalMessage.toLowerCase().includes(String(schoolName).toLowerCase())) {
+        finalMessage = `${schoolName}: ${finalMessage}`;
+      }
+
+      const sendResult = await sendArkeselSMS({
+        apiKey,
+        apiUrl: platformSmsConfig.apiUrl,
+        sender,
+        recipient: phoneResult.formatted,
+        message: finalMessage,
+        schoolName
+      });
+
+      if (sendResult.success) {
+        return res.status(200).json({
+          success: true,
+          status: 'delivered',
+          logId: sendResult.logId,
           provider: 'Arkesel SMS Gateway',
-          recipient: formattedRecipient,
-          senderIdentity: sender,
-          costGHS: cost,
-          error: errorMsg,
-          arkeselResponse: rawJson || { rawBody: responseText },
-          providerResponse: `HTTP ${statusCode} Error: ${errorMsg}`,
+          recipient: sendResult.recipient,
+          senderIdentity: sendResult.sender,
+          costGHS: sendResult.costGHS,
+          arkeselResponse: sendResult.rawResponse,
+          providerResponse: `HTTP 200 OK | Arkesel accepted SMS for ${sendResult.recipient}`,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        return res.status(200).json({
+          success: false,
+          status: 'failed',
+          logId: sendResult.logId,
+          provider: 'Arkesel SMS Gateway',
+          recipient: sendResult.recipient,
+          senderIdentity: sendResult.sender,
+          costGHS: sendResult.costGHS,
+          error: sendResult.message,
+          statusCode: sendResult.statusCode,
+          arkeselResponse: sendResult.rawResponse,
+          providerResponse: `HTTP ${sendResult.statusCode} Error: ${sendResult.message}`,
           timestamp: new Date().toISOString()
         });
       }
     } catch (err: any) {
-      console.error('[Arkesel Dispatch Network/Timeout Failure]:', err);
-      const isTimeout = err?.name === 'TimeoutError' || err?.message?.includes('timeout');
       return res.status(200).json({
         success: false,
         status: 'failed',
-        logId,
-        provider: 'Arkesel SMS Gateway',
-        recipient: formattedRecipient,
-        senderIdentity: sender,
-        error: isTimeout ? 'Arkesel request timed out (12s)' : (err?.message || 'Network failure communicating with Arkesel API'),
-        arkeselResponse: { error: err?.message || 'NETWORK_ERROR', isTimeout },
-        timestamp: new Date().toISOString()
+        error: `Server Execution Error: ${err?.message || 'Failed to dispatch SMS'}`
       });
     }
   });

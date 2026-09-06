@@ -26,7 +26,16 @@ export const SuperAdminCommunication: React.FC<SuperAdminCommunicationProps> = (
   onSaveCommunication
 }) => {
   const [tab, setTab] = useState<'sms' | 'whatsapp'>(defaultTab);
-  const [settings, setSettings] = useState<PlatformCommunicationSettings>(initialSettings);
+  const [settings, setSettings] = useState<PlatformCommunicationSettings>(() => {
+    const s = { ...initialSettings };
+    if (!s.sms?.apiUrl || s.sms.apiUrl.includes('hubtel')) {
+      s.sms = {
+        ...s.sms,
+        apiUrl: 'https://sms.arkesel.com/api/v2/sms/send'
+      };
+    }
+    return s;
+  });
   const [showSmsSecret, setShowSmsSecret] = useState(false);
   const [showWaSecret, setShowWaSecret] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -34,7 +43,32 @@ export const SuperAdminCommunication: React.FC<SuperAdminCommunicationProps> = (
 
   const handleSave = async () => {
     setIsSaving(true);
-    await onSaveCommunication(settings);
+    const cleanSettings = {
+      ...settings,
+      sms: {
+        ...settings.sms,
+        apiUrl: (!settings.sms.apiUrl || settings.sms.apiUrl.includes('hubtel'))
+          ? 'https://sms.arkesel.com/api/v2/sms/send'
+          : settings.sms.apiUrl.trim()
+      }
+    };
+    try {
+      await fetch('/api/communication/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: cleanSettings.sms.apiKey,
+          apiSecret: cleanSettings.sms.apiSecret,
+          apiUrl: cleanSettings.sms.apiUrl,
+          senderId: cleanSettings.sms.senderId,
+          isActive: cleanSettings.sms.isActive,
+          provider: cleanSettings.sms.provider
+        })
+      });
+    } catch (e) {
+      console.warn('Could not sync to backend proxy:', e);
+    }
+    await onSaveCommunication(cleanSettings);
     setIsSaving(false);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);

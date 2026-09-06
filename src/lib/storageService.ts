@@ -86,6 +86,8 @@ export const loadInitialDatabase = (): DatabaseState => {
         }
         if (!parsed.platformCommunication) {
           parsed.platformCommunication = INITIAL_PLATFORM_COMMUNICATION;
+        } else if (parsed.platformCommunication.sms && (!parsed.platformCommunication.sms.apiUrl || parsed.platformCommunication.sms.apiUrl.includes('hubtel'))) {
+          parsed.platformCommunication.sms.apiUrl = 'https://sms.arkesel.com/api/v2/sms/send';
         }
         if (!parsed.communicationLogs) {
           parsed.communicationLogs = [];

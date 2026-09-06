@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { normalizeGhanaPhoneNumber } from './phoneNormalizer';
 
 export interface SendSmsRequest {
   schoolId: string;
@@ -44,18 +45,8 @@ export interface TestSmsResult {
 }
 
 function formatGhanaianRecipient(phone: string): string {
-  if (!phone) return '';
-  let cleaned = phone.replace(/[\s\-()+]/g, '');
-  if (cleaned.startsWith('0') && cleaned.length === 10) {
-    return '233' + cleaned.substring(1);
-  }
-  if (cleaned.startsWith('233') && (cleaned.length === 12 || cleaned.length === 13)) {
-    return cleaned;
-  }
-  if (cleaned.length === 9) {
-    return '233' + cleaned;
-  }
-  return cleaned;
+  const res = normalizeGhanaPhoneNumber(phone);
+  return res.isValid ? res.formatted : res.formatted;
 }
 
 function sanitizeSenderId(sender?: string): string {
@@ -350,17 +341,19 @@ export async function handleTestSms(data: TestSmsRequest): Promise<TestSmsResult
     };
   }
 
-  const formattedRecipient = formatGhanaianRecipient(data.testRecipient.trim());
-  if (!formattedRecipient || formattedRecipient.length < 9) {
+  const phoneResult = normalizeGhanaPhoneNumber(data.testRecipient.trim());
+  if (!phoneResult.isValid || !phoneResult.formatted) {
     return {
       success: false,
       statusCode: 400,
       provider: 'arkesel',
-      message: 'Validation Error: Invalid Ghanaian phone number format. Enter e.g. 0244123456 or 233244123456.',
+      message: `Validation Error: ${phoneResult.error || 'Invalid Ghanaian phone number format.'}`,
       responsePayload: { error: 'INVALID_PHONE_NUMBER', raw: data.testRecipient },
       timestamp: now
     };
   }
+
+  const formattedRecipient = phoneResult.formatted;
 
   const sender = sanitizeSenderId(data.senderId || defaultSenderId);
   const messageContent = data.testMessage?.trim() || 

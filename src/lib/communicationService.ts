@@ -7,6 +7,7 @@ import {
   CommunicationTestParams 
 } from '../types';
 import { fsAddCommunicationLog, fsAddSmsMessage } from './firestoreService';
+import { normalizeGhanaPhoneNumber } from './phoneNormalizer';
 
 /**
  * Platform Central Communication Service
@@ -53,16 +54,10 @@ export function sanitizeSenderId(schoolName: string, shortCode?: string, approve
   return `${firstWord}${abbr}`.slice(0, 11);
 }
 
-// Format Ghanaian phone numbers to standard international format (e.g., "0244123456" -> "233244123456" or "+233244123456")
+// Format Ghanaian phone numbers to standard international format (+233XXXXXXXXX)
 export function formatGhanaPhoneNumber(phone: string): string {
-  if (!phone) return '';
-  const cleaned = phone.replace(/[^0-9+]/g, '');
-  if (cleaned.startsWith('+233')) return cleaned;
-  if (cleaned.startsWith('233')) return `+${cleaned}`;
-  if (cleaned.startsWith('0') && cleaned.length === 10) {
-    return `+233${cleaned.slice(1)}`;
-  }
-  return cleaned;
+  const result = normalizeGhanaPhoneNumber(phone);
+  return result.isValid ? result.formatted : result.formatted;
 }
 
 /**
@@ -223,6 +218,41 @@ export async function sendCentralCommunication(
   }
 
   return commLog;
+}
+
+/**
+ * Super Admin: Verify Arkesel API Key and fetch balance details directly via backend proxy
+ */
+export async function verifyArkeselApiKey(apiKey: string, apiUrl?: string): Promise<{
+  success: boolean;
+  statusCode: number;
+  message: string;
+  responsePayload: Record<string, any>;
+  timestamp: string;
+}> {
+  try {
+    const res = await fetch('/api/communication/test-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: apiKey.trim(), apiUrl })
+    });
+    const data = await res.json();
+    return {
+      success: Boolean(data.success),
+      statusCode: data.statusCode || res.status,
+      message: data.message || (data.success ? 'Arkesel API Key verified successfully.' : 'Failed to verify Arkesel API Key.'),
+      responsePayload: data.responsePayload || data,
+      timestamp: data.timestamp || new Date().toISOString()
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      statusCode: 500,
+      message: `Connection error: ${err?.message || 'Failed to connect to backend verification service'}`,
+      responsePayload: { error: err?.message },
+      timestamp: new Date().toISOString()
+    };
+  }
 }
 
 /**

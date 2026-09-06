@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Radio, 
   MessageSquare, 
@@ -22,7 +22,8 @@ import {
   CommunicationLog 
 } from '../../types';
 import { useSchool } from '../../contexts/SchoolContext';
-import { testCentralGateway, sanitizeSenderId } from '../../lib/communicationService';
+import { testCentralGateway, sanitizeSenderId, verifyArkeselApiKey } from '../../lib/communicationService';
+import { normalizeGhanaPhoneNumber } from '../../lib/phoneNormalizer';
 
 interface SuperAdminCommunicationAPIProps {
   initialSettings: PlatformCommunicationSettings;
@@ -36,7 +37,31 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
   const { allSchools, allCommunicationLogs, communicationLogs } = useSchool();
 
   const [activeTab, setActiveTab] = useState<'sms' | 'whatsapp' | 'triggers' | 'logs'>('sms');
-  const [settings, setSettings] = useState<PlatformCommunicationSettings>(initialSettings);
+  const [settings, setSettings] = useState<PlatformCommunicationSettings>(() => {
+    const s = { ...initialSettings };
+    if (!s.sms?.apiUrl || s.sms.apiUrl.includes('hubtel')) {
+      s.sms = {
+        ...s.sms,
+        apiUrl: 'https://sms.arkesel.com/api/v2/sms/send'
+      };
+    }
+    return s;
+  });
+
+  useEffect(() => {
+    if (initialSettings) {
+      setSettings(prev => {
+        const s = { ...initialSettings };
+        if (!s.sms?.apiUrl || s.sms.apiUrl.includes('hubtel')) {
+          s.sms = {
+            ...s.sms,
+            apiUrl: 'https://sms.arkesel.com/api/v2/sms/send'
+          };
+        }
+        return s;
+      });
+    }
+  }, [initialSettings]);
   
   // Visibility toggles
   const [showSmsKey, setShowSmsKey] = useState(false);
@@ -75,18 +100,30 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const cleanSmsUrl = (!settings.sms.apiUrl || settings.sms.apiUrl.includes('hubtel'))
+        ? 'https://sms.arkesel.com/api/v2/sms/send'
+        : settings.sms.apiUrl.trim();
+
+      const sanitizedSettings = {
+        ...settings,
+        sms: {
+          ...settings.sms,
+          apiUrl: cleanSmsUrl
+        }
+      };
+
       // 1. Sync to backend server
       try {
         await fetch('/api/communication/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            provider: settings.sms.provider || 'arkesel',
-            apiKey: settings.sms.apiKey,
-            apiSecret: settings.sms.apiSecret,
-            apiUrl: settings.sms.apiUrl || 'https://sms.arkesel.com/api/v2/sms/send',
-            senderId: settings.sms.senderId || 'SCHOOLOS',
-            isActive: settings.sms.isActive
+            provider: sanitizedSettings.sms.provider || 'arkesel',
+            apiKey: sanitizedSettings.sms.apiKey,
+            apiSecret: sanitizedSettings.sms.apiSecret,
+            apiUrl: cleanSmsUrl,
+            senderId: sanitizedSettings.sms.senderId || 'SCHOOLOS',
+            isActive: sanitizedSettings.sms.isActive
           })
         });
       } catch (backendErr) {
@@ -94,13 +131,51 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
       }
 
       // 2. Persist to Firestore / State
-      await onSaveCommunication(settings);
+      await onSaveCommunication(sanitizedSettings);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 3500);
     } catch (err) {
       console.error('Failed to save communication settings:', err);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const [isVerifyingKey, setIsVerifyingKey] = useState(false);
+  const [keyVerifyResult, setKeyVerifyResult] = useState<{
+    success: boolean;
+    message: string;
+    balance?: number;
+    mainBalance?: string;
+  } | null>(null);
+
+  const handleVerifyKey = async () => {
+    if (!settings.sms.apiKey || !settings.sms.apiKey.trim()) {
+      setKeyVerifyResult({
+        success: false,
+        message: 'Please enter an Arkesel API key to verify.'
+      });
+      return;
+    }
+
+    setIsVerifyingKey(true);
+    setKeyVerifyResult(null);
+
+    try {
+      const res = await verifyArkeselApiKey(settings.sms.apiKey);
+      setKeyVerifyResult({
+        success: res.success,
+        message: res.message,
+        balance: res.responsePayload?.balance,
+        mainBalance: res.responsePayload?.mainBalance
+      });
+    } catch (err: any) {
+      setKeyVerifyResult({
+        success: false,
+        message: err?.message || 'Verification failed. Could not reach Arkesel API.'
+      });
+    } finally {
+      setIsVerifyingKey(false);
     }
   };
 
@@ -118,7 +193,7 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
         provider: gatewayConfig.provider || 'arkesel',
         apiKey: gatewayConfig.apiKey,
         apiSecret: gatewayConfig.apiSecret,
-        apiUrl: gatewayConfig.apiUrl || 'https://sms.arkesel.com/api/v2/sms/send',
+        apiUrl: (gatewayConfig.apiUrl && !gatewayConfig.apiUrl.includes('hubtel')) ? gatewayConfig.apiUrl : 'https://sms.arkesel.com/api/v2/sms/send',
         senderId: senderName,
         phoneNumberId: testChannel === 'whatsapp' ? (gatewayConfig as any).phoneNumberId : undefined,
         businessAccountId: testChannel === 'whatsapp' ? (gatewayConfig as any).businessAccountId : undefined,
@@ -481,7 +556,18 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
                 <label className="block font-bold text-slate-800">
                   Arkesel API Key <span className="text-rose-600">* (Required)</span>
                 </label>
-                <span className="text-[10px] text-teal-700 font-medium">Header: api-key</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleVerifyKey}
+                    disabled={isVerifyingKey || !settings.sms.apiKey}
+                    className="text-[10px] font-bold text-teal-800 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2 py-0.5 rounded-md flex items-center gap-1 cursor-pointer disabled:opacity-40"
+                  >
+                    {isVerifyingKey ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <ShieldCheck className="w-2.5 h-2.5" />}
+                    <span>Verify Key & Balance</span>
+                  </button>
+                  <span className="text-[10px] text-teal-700 font-medium">Header: api-key</span>
+                </div>
               </div>
               <div className="relative">
                 <input
@@ -502,6 +588,23 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
                   {showSmsKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              {keyVerifyResult && (
+                <div className={`p-2 rounded-lg text-xs flex items-center justify-between border ${
+                  keyVerifyResult.success 
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200' 
+                    : 'bg-rose-50 text-rose-900 border-rose-200'
+                }`}>
+                  <div className="flex items-center gap-1.5">
+                    {keyVerifyResult.success ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <XCircle className="w-3.5 h-3.5 text-rose-600" />}
+                    <span className="font-semibold">{keyVerifyResult.message}</span>
+                  </div>
+                  {keyVerifyResult.balance !== undefined && (
+                    <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-emerald-200 text-emerald-800">
+                      Balance: {keyVerifyResult.mainBalance || `${keyVerifyResult.balance} SMS`}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -1109,12 +1212,25 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
                   type="tel"
                   value={testRecipientPhone}
                   onChange={(e) => setTestRecipientPhone(e.target.value)}
-                  placeholder="e.g. 0244123456 or 233244123456"
+                  placeholder="e.g. 0244123456 or +233244123456"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600"
                 />
-                <span className="text-[10px] text-slate-400">
-                  Ghanaian mobile numbers (MTN, Telecel, AT) are automatically converted to international 233 format.
-                </span>
+                {testRecipientPhone.trim() ? (
+                  (() => {
+                    const norm = normalizeGhanaPhoneNumber(testRecipientPhone.trim());
+                    return (
+                      <div className={`text-[11px] flex items-center gap-1 font-mono font-semibold ${norm.isValid ? 'text-emerald-700' : 'text-amber-700'}`}>
+                        <span>{norm.isValid ? '✓ Standardized E.164:' : '⚠ Format Alert:'}</span>
+                        <span className="font-bold underline">{norm.formatted || testRecipientPhone}</span>
+                        {!norm.isValid && <span className="font-sans font-normal text-rose-600 ml-1">({norm.error})</span>}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <span className="text-[10px] text-slate-400">
+                    Ghanaian mobile numbers (MTN, Telecel, AT) are automatically converted to international +233 format (e.g. 0241234567 → +233241234567).
+                  </span>
+                )}
               </div>
 
               <div className="space-y-1">

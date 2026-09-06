@@ -380,7 +380,11 @@ function startGlobalFirestoreListeners() {
       const paystackDoc = snapshot.docs.find(d => d.id === 'paystack');
       const updates: Partial<DatabaseState> = {};
       if (commDoc) {
-        updates.platformCommunication = commDoc.data() as PlatformCommunicationSettings;
+        const commData = commDoc.data() as PlatformCommunicationSettings;
+        if (commData?.sms && (!commData.sms.apiUrl || commData.sms.apiUrl.includes('hubtel'))) {
+          commData.sms.apiUrl = 'https://sms.arkesel.com/api/v2/sms/send';
+        }
+        updates.platformCommunication = commData;
       }
       if (paystackDoc) {
         updates.platformPaystack = paystackDoc.data() as PaystackPlatformConfig;
