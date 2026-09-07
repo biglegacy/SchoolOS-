@@ -23,6 +23,7 @@ import {
 } from '../../types';
 import { useSchool } from '../../contexts/SchoolContext';
 import { testCentralGateway, sanitizeSenderId, verifyArkeselApiKey } from '../../lib/communicationService';
+import { checkArkeselBalance } from '../../lib/arkeselService';
 import { normalizeGhanaPhoneNumber } from '../../lib/phoneNormalizer';
 
 interface SuperAdminCommunicationAPIProps {
@@ -149,6 +150,88 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
     mainBalance?: string;
   } | null>(null);
 
+  // Dedicated Arkesel SMS Balance Checker State
+  const [isCheckingBalance, setIsCheckingBalance] = useState(false);
+  const [balanceData, setBalanceData] = useState<{
+    smsBalance: number | string;
+    mainBalance?: string | number;
+    checkedAt: string;
+    message?: string;
+  } | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+
+  const handleCheckSMSBalance = async () => {
+    if (isCheckingBalance) return; // Prevent duplicate concurrent balance requests
+    const apiKey = (settings.sms.apiKey || '').trim();
+    if (!apiKey) {
+      setBalanceError('Arkesel API Key is required. Please enter an API key below.');
+      setBalanceData(null);
+      return;
+    }
+
+    setIsCheckingBalance(true);
+    setBalanceError(null);
+
+    try {
+      // 1. Check via server backend proxy first
+      const res = await fetch('/api/communication/balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey,
+          apiUrl: 'https://sms.arkesel.com/api/v2/clients/balance-details'
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && (data.smsBalance !== undefined || data.mainBalance !== undefined)) {
+        setBalanceData({
+          smsBalance: data.smsBalance ?? 'Active',
+          mainBalance: data.mainBalance,
+          checkedAt: new Date().toLocaleTimeString(),
+          message: data.message
+        });
+        setBalanceError(null);
+      } else {
+        // Fallback: Direct query to Arkesel API
+        const direct = await checkArkeselBalance(apiKey);
+        if (direct.success) {
+          setBalanceData({
+            smsBalance: direct.balance ?? 'Active',
+            mainBalance: direct.mainBalance,
+            checkedAt: new Date().toLocaleTimeString(),
+            message: direct.message
+          });
+          setBalanceError(null);
+        } else {
+          setBalanceError(direct.message || data.error || 'Failed to retrieve balance from Arkesel.');
+          setBalanceData(null);
+        }
+      }
+    } catch (err: any) {
+      try {
+        const direct = await checkArkeselBalance(apiKey);
+        if (direct.success) {
+          setBalanceData({
+            smsBalance: direct.balance ?? 'Active',
+            mainBalance: direct.mainBalance,
+            checkedAt: new Date().toLocaleTimeString(),
+            message: direct.message
+          });
+          setBalanceError(null);
+        } else {
+          setBalanceError(direct.message || err?.message || 'Could not connect to Arkesel API.');
+          setBalanceData(null);
+        }
+      } catch (e: any) {
+        setBalanceError(e?.message || err?.message || 'Failed to connect to Arkesel gateway.');
+        setBalanceData(null);
+      }
+    } finally {
+      setIsCheckingBalance(false);
+    }
+  };
+
   const handleVerifyKey = async () => {
     if (!settings.sms.apiKey || !settings.sms.apiKey.trim()) {
       setKeyVerifyResult({
@@ -272,7 +355,7 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
 
   // Statistics
   const totalDispatches = (allCommunicationLogs || []).length;
-  const successfulDispatches = (allCommunicationLogs || []).filter(l => l.status === 'delivered' || l.status === 'sent').length;
+  const successfulDispatches = (allCommunicationLogs || []).filter(l => l.status === 'delivered' || l.status === 'accepted' || l.status === 'sent').length;
   const successRate = totalDispatches > 0 ? Math.round((successfulDispatches / totalDispatches) * 100) : 100;
 
   // Connection status badge calculations
@@ -501,6 +584,70 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
                 </span>
               </label>
             </div>
+          </div>
+
+          {/* DEDICATED LIVE ARKESEL SMS BALANCE CHECKER */}
+          <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 border border-teal-800/80 rounded-2xl p-5 shadow-sm text-white">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-400 shrink-0">
+                  <Radio className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <div className="text-[11px] font-mono text-teal-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <span>Arkesel Central SMS Gateway</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  </div>
+                  <div className="text-xl font-black text-white flex items-center gap-2 mt-0.5">
+                    <span>SMS Balance:</span>
+                    {balanceData ? (
+                      <span className="font-mono text-teal-300">
+                        {typeof balanceData.smsBalance === 'number' 
+                          ? `${balanceData.smsBalance.toLocaleString()} credits` 
+                          : `${balanceData.smsBalance} credits`}
+                      </span>
+                    ) : (
+                      <span className="text-sm font-normal text-slate-400 italic">
+                        Not checked yet — click to query Arkesel
+                      </span>
+                    )}
+                  </div>
+                  {balanceData?.mainBalance !== undefined && (
+                    <div className="text-xs text-slate-300 mt-0.5">
+                      Main Account Balance: <b className="font-mono text-teal-200">GHS {balanceData.mainBalance}</b>
+                    </div>
+                  )}
+                  {balanceData?.checkedAt && (
+                    <div className="text-[10px] font-mono text-teal-400/80 mt-1">
+                      Live gateway query: {balanceData.checkedAt}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  id="btn-check-sms-balance"
+                  onClick={handleCheckSMSBalance}
+                  disabled={isCheckingBalance || !settings.sms.apiKey}
+                  className="px-5 py-3 bg-teal-500 hover:bg-teal-400 active:scale-95 disabled:opacity-50 text-slate-950 font-black text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isCheckingBalance ? 'animate-spin' : ''}`} />
+                  <span>{isCheckingBalance ? 'CONNECTING TO ARKESEL...' : (balanceData ? 'REFRESH SMS BALANCE' : 'CHECK SMS BALANCE')}</span>
+                </button>
+              </div>
+            </div>
+
+            {balanceError && (
+              <div className="mt-3.5 p-3 bg-rose-950/90 border border-rose-700/80 rounded-xl text-xs text-rose-200 flex items-start gap-2 animate-in fade-in">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Gateway Balance Query Error: </span>
+                  <span>{balanceError}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">

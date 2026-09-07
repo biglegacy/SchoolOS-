@@ -43,6 +43,7 @@ import { useAuth } from './AuthContext';
 import { calculateGhanaGrade, calculatePositions, generateTeacherRemark, generateHeadTeacherRemark, calculateStudentFeeBalance } from '../utils/calculations';
 import {
   sendCentralCommunication,
+  sendBulkCentralCommunication,
   triggerFeePaymentNotification,
   triggerAttendanceAbsenceAlert,
   triggerExamResultAlert
@@ -1006,35 +1007,34 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     await fsRecordFeePayment(newPayment);
 
-    // Auto-trigger central SMS receipt if payer phone or student guardian phone exists
+    // Auto-trigger central SMS receipt non-blockingly so cashier is never stalled
     if (sendReceiptSMS && school) {
-      try {
-        const student = students.find(s => s.id === newPayment.studentId);
-        const payerPhone = newPayment.payerPhone || student?.guardianPhone;
-        if (payerPhone) {
-          const commLog = await triggerFeePaymentNotification(
-            school,
-            {
-              id: newPayment.id,
-              studentName: newPayment.studentName,
-              amount: newPayment.amount,
-              payerName: newPayment.payerName,
-              payerPhone,
-              receiptNumber: finalReceiptNumber,
-              term: newPayment.term || school.currentTerm,
-              paymentMethod: newPayment.paymentMethod
-            },
-            dbState.platformCommunication || INITIAL_PLATFORM_COMMUNICATION
-          );
+      const student = students.find(s => s.id === newPayment.studentId);
+      const payerPhone = newPayment.payerPhone || student?.guardianPhone;
+      if (payerPhone) {
+        triggerFeePaymentNotification(
+          school,
+          {
+            id: newPayment.id,
+            studentName: newPayment.studentName,
+            amount: newPayment.amount,
+            payerName: newPayment.payerName,
+            payerPhone,
+            receiptNumber: finalReceiptNumber,
+            term: newPayment.term || school.currentTerm,
+            paymentMethod: newPayment.paymentMethod
+          },
+          dbState.platformCommunication || INITIAL_PLATFORM_COMMUNICATION
+        ).then(commLog => {
           if (commLog) {
-            updateStateAndPersist(prev => ({
+            setDbState(prev => ({
               ...prev,
-              communicationLogs: [commLog, ...(prev.communicationLogs || [])]
+              communicationLogs: [commLog, ...(prev.communicationLogs || []).filter(c => c.id !== commLog.id)]
             }));
           }
-        }
-      } catch (err) {
-        console.warn('Could not dispatch automated fee receipt SMS:', err);
+        }).catch(err => {
+          console.warn('Could not dispatch automated fee receipt SMS:', err);
+        });
       }
     }
 
@@ -1703,37 +1703,46 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
     await markAttendance(formatted, classroomId, date);
 
-    // Auto-alert absent students' guardians if requested or triggered
+    // Auto-alert absent students' guardians non-blockingly without delaying teacher UI
     if (notifyAbsentGuardians && school) {
       const classroomObj = classrooms.find(c => c.id === classroomId);
       const absentRecords = records.filter(r => r.status === 'absent');
-      for (const rec of absentRecords) {
-        const stu = students.find(s => s.id === rec.studentId);
-        if (stu && stu.guardianPhone) {
-          try {
-            const log = await triggerAttendanceAbsenceAlert(
-              school,
-              {
-                id: stu.id,
-                firstName: stu.firstName,
-                lastName: stu.lastName,
-                classroomName: classroomObj?.name || 'Classroom',
-                guardianPhone: stu.guardianPhone,
-                guardianName: stu.guardianName
-              },
-              date,
-              dbState.platformCommunication || INITIAL_PLATFORM_COMMUNICATION
-            );
-            if (log) {
-              updateStateAndPersist(prev => ({
-                ...prev,
-                communicationLogs: [log, ...(prev.communicationLogs || [])]
-              }));
+      const absentStudents = absentRecords
+        .map(rec => students.find(s => s.id === rec.studentId))
+        .filter((stu): stu is NonNullable<typeof stu> => Boolean(stu && stu.guardianPhone));
+
+      if (absentStudents.length > 0) {
+        // Fire-and-forget concurrent batch dispatch
+        (async () => {
+          const logs: CommunicationLog[] = [];
+          await Promise.all(absentStudents.map(async stu => {
+            try {
+              const log = await triggerAttendanceAbsenceAlert(
+                school,
+                {
+                  id: stu.id,
+                  firstName: stu.firstName,
+                  lastName: stu.lastName,
+                  classroomName: classroomObj?.name || 'Classroom',
+                  guardianPhone: stu.guardianPhone,
+                  guardianName: stu.guardianName
+                },
+                date,
+                dbState.platformCommunication || INITIAL_PLATFORM_COMMUNICATION
+              );
+              if (log) logs.push(log);
+            } catch (e) {
+              console.warn('Failed to send absence alert SMS:', e);
             }
-          } catch (e) {
-            console.warn('Failed to send absence alert SMS:', e);
+          }));
+
+          if (logs.length > 0) {
+            setDbState(prev => ({
+              ...prev,
+              communicationLogs: [...logs, ...(prev.communicationLogs || [])]
+            }));
           }
-        }
+        })();
       }
     }
   };
@@ -1800,7 +1809,34 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const sendSMSBroadcast = async (recipientGroup: any, message: string, recipientCount?: number): Promise<BroadcastMessage> => {
-    const count = recipientCount || (recipientGroup === 'all' ? students.length + teachers.length : recipientGroup === 'parents' ? students.length : recipientGroup === 'teachers' ? teachers.length : 1);
+    // Collect targeted recipient contacts for actual gateway submission
+    const phoneList: Array<{ recipient: string; recipientName?: string }> = [];
+    if (recipientGroup === 'all_parents' || recipientGroup === 'parents' || recipientGroup === 'all' || recipientGroup === 'all_guardians') {
+      students.forEach(s => {
+        if (s.guardianPhone && s.guardianPhone.trim()) {
+          phoneList.push({ recipient: s.guardianPhone, recipientName: s.guardianName || `${s.firstName}'s Guardian` });
+        }
+      });
+    }
+    if (recipientGroup === 'all_staff' || recipientGroup === 'staff' || recipientGroup === 'teachers' || recipientGroup === 'all') {
+      teachers.forEach(t => {
+        if (t.phone && t.phone.trim()) {
+          phoneList.push({ recipient: t.phone, recipientName: t.fullName });
+        }
+      });
+    }
+    if (recipientGroup === 'fee_defaulters' || recipientGroup === 'defaulters') {
+      const summaries = getStudentFeeSummaries();
+      const defaulterIds = new Set(summaries.filter(s => s.amountOwing > 0).map(s => s.studentId));
+      const defaulters = students.filter(s => defaulterIds.has(s.id) && s.guardianPhone);
+      defaulters.forEach(s => {
+        if (s.guardianPhone) {
+          phoneList.push({ recipient: s.guardianPhone, recipientName: s.guardianName || `${s.firstName}'s Guardian` });
+        }
+      });
+    }
+
+    const count = recipientCount || Math.max(1, phoneList.length);
     const validGroup: SMSBroadcastRecipient = typeof recipientGroup === 'string' && (
       recipientGroup === 'all_parents' || 
       recipientGroup === 'all_guardians' || 
@@ -1813,7 +1849,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       recipientGroup === 'custom'
     ) ? recipientGroup : 'custom';
 
-    return await sendBroadcastMessage({
+    const broadcast = await sendBroadcastMessage({
       type: 'sms',
       senderId: settings.smsSenderId || school?.shortCode || 'SCHOOLOS',
       recipientGroup: validGroup,
@@ -1821,6 +1857,28 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       message,
       sentBy: currentUser?.fullName || 'School Administrator',
     });
+
+    // Fast asynchronous background submission to Arkesel SMS Gateway
+    if (school && phoneList.length > 0) {
+      sendBulkCentralCommunication(
+        school,
+        phoneList,
+        message,
+        'announcement',
+        dbState.platformCommunication || INITIAL_PLATFORM_COMMUNICATION
+      ).then(res => {
+        if (res.logs.length > 0) {
+          setDbState(prev => ({
+            ...prev,
+            communicationLogs: [...res.logs, ...(prev.communicationLogs || [])]
+          }));
+        }
+      }).catch(err => {
+        console.warn('[Broadcast] Async Arkesel bulk submission note:', err);
+      });
+    }
+
+    return broadcast;
   };
 
   const hasAccess = (feature: FeatureKey): boolean => {

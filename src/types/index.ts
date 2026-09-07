@@ -44,6 +44,9 @@ export interface SubscriptionTier {
   description: string;
   features: FeatureKey[];
   studentLimit: number;
+  smsAllowance: number; // Term allowance: Basic 500, Standard 1500, Premium 4000
+  additionalSmsPriceGHS?: number; // Price per extra SMS credit (e.g. GH₵0.05)
+  isRecommended?: boolean; // Highlighted as RECOMMENDED (Standard plan)
   isActive: boolean;
   displayOrder: number;
   createdAt: string;
@@ -580,10 +583,19 @@ export interface SchoolSettings {
 export type CommunicationCategory = 
   | 'fee_receipt' 
   | 'fee_reminder' 
+  | 'fee_deadline'
   | 'attendance_alert' 
   | 'exam_results' 
+  | 'exam_notice'
+  | 'pta_meeting'
+  | 'school_reopening'
+  | 'school_closure'
+  | 'school_event'
+  | 'emergency'
   | 'broadcast' 
   | 'announcement'
+  | 'classroom_sms'
+  | 'scheduled_sms'
   | 'test' 
   | 'notice';
 
@@ -619,6 +631,9 @@ export interface PlatformCommunicationSettings {
     lastTestedAt?: string;
     lastTestStatus?: 'success' | 'failed' | 'untested';
     lastTestMessage?: string;
+    lastBalanceCheckAt?: string;
+    lastBalance?: number | string;
+    lastMainBalance?: number | string;
   };
   whatsapp: {
     provider: 'meta' | 'twilio' | 'infobip' | string;
@@ -644,20 +659,27 @@ export interface PlatformCommunicationSettings {
 
 export interface CommunicationLog {
   id: string;
+  messageId?: string; // Unique deduplication ID
+  idempotencyKey?: string; // Client/trigger idempotency key
   schoolId: string;
   schoolName: string; // Authoritative registered school name
   type: 'sms' | 'whatsapp' | 'email' | 'system';
-  recipient: string; // e.g. "0244123456"
+  recipient: string; // e.g. "+233244123456"
   recipientName?: string; // e.g. "Mr. Kwame Mensah"
   senderName: string; // Registered school name
   senderIdentity: string; // School's registered phone or approved sender ID
   provider: string; // e.g. "Arkesel SMS Gateway", "Meta Cloud API"
-  status: 'delivered' | 'sent' | 'failed' | 'pending';
+  status: 'submitted' | 'delivered' | 'accepted' | 'sent' | 'failed' | 'pending' | 'queued' | 'no_phone' | 'processing';
   message: string;
   category: CommunicationCategory;
   relatedRecordId?: string; // e.g. paymentId, attendanceId, examId
   providerResponse?: string;
   costGHS?: number;
+  smsSegments?: number;
+  subscriptionTier?: string;
+  failureReason?: string;
+  duplicateSuppressed?: boolean;
+  submissionLatencyMs?: number;
   timestamp: string;
   academicYear?: string;
   term?: string;
@@ -667,12 +689,19 @@ export interface CommunicationLog {
 
 export interface SmsMessage {
   id: string;
+  messageId?: string;
+  idempotencyKey?: string;
   schoolId: string;
   recipient: string;
   sender: string;
   message: string;
-  status: 'delivered' | 'failed' | 'pending';
+  status: 'submitted' | 'delivered' | 'accepted' | 'sent' | 'failed' | 'pending' | 'queued' | 'no_phone' | 'processing';
   costGHS: number;
+  smsSegments?: number;
+  subscriptionTier?: string;
+  failureReason?: string;
+  duplicateSuppressed?: boolean;
+  submissionLatencyMs?: number;
   arkeselResponse?: any;
   createdAt: string;
   createdBy?: string;
@@ -691,6 +720,7 @@ export interface SendCommunicationParams {
   category: CommunicationCategory;
   relatedRecordId?: string;
   targetClassroomId?: string;
+  idempotencyKey?: string;
 }
 
 export interface CommunicationTestParams {

@@ -67,6 +67,7 @@ export const SuperAdminPlans: React.FC<SuperAdminPlansProps> = ({
       billingPeriod: 'term',
       description: 'Customized educational platform subscription tier.',
       studentLimit: 500,
+      smsAllowance: 500,
       isActive: true,
       displayOrder: plans.length + 1,
       features: ['students', 'teachers', 'classrooms', 'subjects', 'attendance', 'results', 'reports', 'fees', 'settings'],

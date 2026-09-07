@@ -2,7 +2,17 @@ import express from 'express';
 import path from 'path';
 import crypto from 'crypto';
 import fs from 'fs';
+import { Agent, setGlobalDispatcher } from 'undici';
 import { createServer as createViteServer } from 'vite';
+
+// High-performance HTTP connection pooling and keep-alive dispatcher for upstream APIs (Arkesel SMS Gateway & Paystack)
+const globalHttpAgent = new Agent({
+  keepAliveTimeout: 60000,
+  keepAliveMaxTimeout: 600000,
+  connections: 100,
+  pipelining: 1
+});
+setGlobalDispatcher(globalHttpAgent);
 import { 
   sendArkeselSMS, 
   checkArkeselBalance, 
@@ -104,14 +114,38 @@ function generateDynamicReference(
 }
 
 // Authoritative Tier Pricing Map (Source of truth on server: ZERO manual amount input from School Owners)
-const AUTHORITATIVE_TIER_PRICING: Record<string, { name: string; priceGHS: number; description: string }> = {
-  plan_basic: { name: 'BASIC', priceGHS: 350, description: 'Essential academic and administrative core' },
-  basic: { name: 'BASIC', priceGHS: 350, description: 'Essential academic and administrative core' },
-  plan_standard: { name: 'STANDARD', priceGHS: 550, description: 'Expanded academic, examination & POS suite' },
-  standard: { name: 'STANDARD', priceGHS: 550, description: 'Expanded academic, examination & POS suite' },
-  plan_premium: { name: 'PREMIUM', priceGHS: 850, description: 'Complete enterprise suite with priority SMS' },
-  premium: { name: 'PREMIUM', priceGHS: 850, description: 'Complete enterprise suite with priority SMS' },
+const AUTHORITATIVE_TIER_PRICING: Record<string, { name: string; priceGHS: number; smsAllowance: number; description: string }> = {
+  plan_basic: { name: 'BASIC', priceGHS: 1500, smsAllowance: 500, description: 'Essential academic and administrative core with 500 SMS credits/term' },
+  basic: { name: 'BASIC', priceGHS: 1500, smsAllowance: 500, description: 'Essential academic and administrative core with 500 SMS credits/term' },
+  plan_standard: { name: 'STANDARD', priceGHS: 2500, smsAllowance: 1500, description: 'Expanded academic, PTA, examination & POS suite with 1,500 SMS credits/term' },
+  standard: { name: 'STANDARD', priceGHS: 2500, smsAllowance: 1500, description: 'Expanded academic, PTA, examination & POS suite with 1,500 SMS credits/term' },
+  plan_premium: { name: 'PREMIUM', priceGHS: 4000, smsAllowance: 4000, description: 'Complete enterprise suite with priority SMS and 4,000 SMS credits/term' },
+  premium: { name: 'PREMIUM', priceGHS: 4000, smsAllowance: 4000, description: 'Complete enterprise suite with priority SMS and 4,000 SMS credits/term' },
 };
+
+// Global Idempotency Registry & In-flight Locks for Duplicate Prevention
+interface IdempotentSmsRecord {
+  idempotencyKey: string;
+  messageId: string;
+  schoolId: string;
+  recipient: string;
+  status: 'processing' | 'submitted' | 'accepted' | 'delivered' | 'failed';
+  result?: any;
+  promise?: Promise<any>;
+  createdAt: number;
+}
+const IDEMPOTENT_SMS_REGISTRY = new Map<string, IdempotentSmsRecord>();
+
+// Cleanup stale idempotency keys older than 2 hours
+function cleanupIdempotentSmsRegistry() {
+  const now = Date.now();
+  for (const [k, v] of IDEMPOTENT_SMS_REGISTRY.entries()) {
+    if (now - v.createdAt > 2 * 60 * 60 * 1000) {
+      IDEMPOTENT_SMS_REGISTRY.delete(k);
+    }
+  }
+}
+setInterval(cleanupIdempotentSmsRegistry, 15 * 60 * 1000);
 
 // Helper: dispatch Arkesel SMS internally using unified service
 async function sendArkeselSMSInternal(recipient: string, message: string, senderOverride?: string, schoolName?: string): Promise<{ success: boolean; error?: string; logId?: string }> {
@@ -808,6 +842,43 @@ async function startServer() {
     }
   });
 
+  // Dedicated Arkesel Balance Check (GET & POST)
+  const handleBalanceCheck = async (req: express.Request, res: express.Response) => {
+    try {
+      const apiKey = (req.body?.apiKey || req.query?.apiKey || platformSmsConfig.apiKey || '').trim();
+      const apiUrl = (req.body?.apiUrl || req.query?.apiUrl || 'https://sms.arkesel.com/api/v2/clients/balance-details').trim();
+
+      if (!apiKey) {
+        return res.status(200).json({
+          success: false,
+          statusCode: 400,
+          error: 'Arkesel API Key is not configured. Please configure it in Super Admin platform settings.'
+        });
+      }
+
+      const balanceResult = await checkArkeselBalance(apiKey, apiUrl);
+      return res.status(200).json({
+        success: balanceResult.success,
+        statusCode: balanceResult.statusCode,
+        smsBalance: balanceResult.balance,
+        mainBalance: balanceResult.mainBalance,
+        currency: 'GHS',
+        message: balanceResult.message,
+        rawResponse: balanceResult.rawResponse,
+        checkedAt: new Date().toISOString()
+      });
+    } catch (err: any) {
+      return res.status(200).json({
+        success: false,
+        statusCode: 500,
+        error: `Failed to retrieve Arkesel balance: ${err?.message}`
+      });
+    }
+  };
+
+  app.get('/api/communication/balance', handleBalanceCheck);
+  app.post('/api/communication/balance', handleBalanceCheck);
+
   // Test Arkesel API Key / Balance endpoint (GET https://sms.arkesel.com/api/v2/clients/balance-details)
   app.post('/api/communication/test-key', async (req, res) => {
     try {
@@ -940,19 +1011,23 @@ async function startServer() {
     }
   });
 
-  // Real Multi-Tenant SMS Dispatch Endpoint
+  // Real Multi-Tenant SMS Dispatch Endpoint with True Idempotency, Performance Tracking & Fast Submission Semantics
   app.post('/api/communication/send-sms', async (req, res) => {
+    const reqStartTime = performance.now();
     try {
       const {
         schoolId,
         schoolName,
         approvedSenderId,
         recipient,
+        recipients: rawRecipients,
         recipientName,
         message,
         category,
         relatedRecordId,
-        apiKey: clientProvidedKey
+        idempotencyKey: clientProvidedKey,
+        messageId: clientMessageId,
+        apiKey: clientProvidedKeySecret
       } = req.body || {};
 
       if (!schoolId) {
@@ -963,15 +1038,15 @@ async function startServer() {
         });
       }
 
-      if (!recipient || !message) {
+      if ((!recipient && (!Array.isArray(rawRecipients) || rawRecipients.length === 0)) || !message) {
         return res.status(200).json({ 
           success: false, 
           status: 'failed', 
-          error: 'Recipient and message are required' 
+          error: 'Recipient phone number and message body are required' 
         });
       }
 
-      const apiKey = (clientProvidedKey || platformSmsConfig.apiKey || '').trim();
+      const apiKey = (clientProvidedKeySecret || platformSmsConfig.apiKey || '').trim();
       if (!apiKey) {
         return res.status(200).json({ 
           success: false, 
@@ -988,13 +1063,229 @@ async function startServer() {
         });
       }
 
-      const phoneResult = normalizeGhanaPhoneNumber(recipient);
-      if (!phoneResult.isValid || !phoneResult.formatted) {
+      // Collect and normalize recipients
+      const validRecipients: string[] = [];
+      if (Array.isArray(rawRecipients) && rawRecipients.length > 0) {
+        for (const r of rawRecipients) {
+          if (r && typeof r === 'string') {
+            const p = normalizeGhanaPhoneNumber(r);
+            if (p.isValid && p.formatted && !validRecipients.includes(p.formatted)) {
+              validRecipients.push(p.formatted);
+            }
+          }
+        }
+      } else if (recipient) {
+        const p = normalizeGhanaPhoneNumber(recipient);
+        if (p.isValid && p.formatted) {
+          validRecipients.push(p.formatted);
+        }
+      }
+
+      if (validRecipients.length === 0) {
+        return res.status(200).json({
+          success: false,
+          status: 'no_phone',
+          error: 'Invalid Ghanaian Phone Number(s): Must be a valid Ghanaian number formatted with +233.'
+        });
+      }
+
+      const primaryRecipient = validRecipients[0];
+      const isBatch = validRecipients.length > 1;
+
+      const sender = sanitizeSenderId(approvedSenderId || schoolName || platformSmsConfig.senderId || 'SCHOOLOS');
+      let finalMessage = String(message).trim();
+      if (schoolName && !finalMessage.toLowerCase().includes(String(schoolName).toLowerCase())) {
+        finalMessage = `${schoolName}: ${finalMessage}`;
+      }
+
+      const prepTimeMs = Number((performance.now() - reqStartTime).toFixed(1));
+
+      // 1. Authoritative Idempotency & Duplicate Request Protection
+      const effectiveKey = clientProvidedKey || (
+        relatedRecordId 
+          ? `sms_${schoolId}_${category || 'notif'}_${relatedRecordId}_${primaryRecipient}`
+          : `sms_${schoolId}_${primaryRecipient}_${crypto.createHash('md5').update(finalMessage).digest('hex').slice(0, 10)}_${Math.floor(Date.now() / 60000)}`
+      );
+
+      const existingRecord = IDEMPOTENT_SMS_REGISTRY.get(effectiveKey);
+      if (existingRecord && !isBatch) {
+        console.log(`[SMS Idempotency Guard] Duplicate SMS intercepted for key: "${effectiveKey}"`);
+        if (existingRecord.status === 'processing') {
+          return res.status(200).json({
+            success: true,
+            status: 'submitted',
+            messageId: existingRecord.messageId,
+            idempotencyKey: effectiveKey,
+            duplicateSuppressed: true,
+            providerResponse: 'SMS submission is in-flight and accepted by gateway (Duplicate Suppressed)',
+            performance: { prepMs: prepTimeMs, totalBackendMs: Number((performance.now() - reqStartTime).toFixed(1)), lifecycle: 'SUBMITTED' },
+            timestamp: new Date().toISOString()
+          });
+        }
+        if (existingRecord.status === 'accepted' || existingRecord.status === 'submitted' || existingRecord.status === 'delivered') {
+          return res.status(200).json({
+            ...existingRecord.result,
+            duplicateSuppressed: true,
+            providerResponse: 'SMS already dispatched to Arkesel Gateway (Duplicate Suppressed)'
+          });
+        }
+      }
+
+      // Register in-flight request lock
+      const messageId = clientMessageId || `MSG-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+      IDEMPOTENT_SMS_REGISTRY.set(effectiveKey, {
+        idempotencyKey: effectiveKey,
+        messageId,
+        schoolId,
+        recipient: primaryRecipient,
+        status: 'processing',
+        createdAt: Date.now()
+      });
+
+      // Calculate segments (160 characters for single, 153 per segment for multipart)
+      const charCount = finalMessage.length;
+      const smsSegments = charCount <= 160 ? 1 : Math.ceil(charCount / 153);
+
+      const arkeselStartTime = performance.now();
+      const sendResult = await sendArkeselSMS({
+        apiKey,
+        apiUrl: platformSmsConfig.apiUrl,
+        sender,
+        recipient: primaryRecipient,
+        recipients: validRecipients,
+        message: finalMessage,
+        schoolName
+      });
+      const arkeselGatewayMs = Number((performance.now() - arkeselStartTime).toFixed(1));
+      const totalBackendMs = Number((performance.now() - reqStartTime).toFixed(1));
+
+      if (sendResult.success) {
+        console.log(`[SMS Perf] ID: ${messageId} | Count: ${validRecipients.length} | Status: SUBMITTED | Arkesel Gateway: ${arkeselGatewayMs}ms | Total Backend: ${totalBackendMs}ms`);
+
+        const responseData = {
+          success: true,
+          status: 'submitted', // Immediate submission confirmation; carrier delivery runs independently
+          messageId,
+          idempotencyKey: effectiveKey,
+          logId: sendResult.logId,
+          provider: 'Arkesel SMS Gateway',
+          recipient: primaryRecipient,
+          recipients: validRecipients,
+          recipientCount: validRecipients.length,
+          senderIdentity: sendResult.sender,
+          costGHS: sendResult.costGHS,
+          smsSegments,
+          arkeselResponse: sendResult.rawResponse,
+          providerResponse: `HTTP 200 OK | Arkesel accepted SMS submission for ${validRecipients.length} recipient${validRecipients.length > 1 ? 's' : ''} (${arkeselGatewayMs}ms)`,
+          performance: {
+            prepMs: prepTimeMs,
+            arkeselGatewayMs,
+            totalBackendMs,
+            lifecycle: 'SUBMITTED'
+          },
+          timestamp: new Date().toISOString()
+        };
+
+        IDEMPOTENT_SMS_REGISTRY.set(effectiveKey, {
+          idempotencyKey: effectiveKey,
+          messageId,
+          schoolId,
+          recipient: primaryRecipient,
+          status: 'submitted',
+          result: responseData,
+          createdAt: Date.now()
+        });
+
+        return res.status(200).json(responseData);
+      } else {
+        console.warn(`[SMS Perf] ID: ${messageId} | FAILED | Gateway: ${arkeselGatewayMs}ms | Total: ${totalBackendMs}ms | Error: ${sendResult.message}`);
+
+        IDEMPOTENT_SMS_REGISTRY.set(effectiveKey, {
+          idempotencyKey: effectiveKey,
+          messageId,
+          schoolId,
+          recipient: primaryRecipient,
+          status: 'failed',
+          createdAt: Date.now()
+        });
+
         return res.status(200).json({
           success: false,
           status: 'failed',
-          error: `Invalid Ghanaian Phone Number: ${phoneResult.error || 'Must be a valid Ghanaian number formatted with +233.'}`
+          messageId,
+          idempotencyKey: effectiveKey,
+          logId: sendResult.logId,
+          provider: 'Arkesel SMS Gateway',
+          recipient: primaryRecipient,
+          recipients: validRecipients,
+          recipientCount: validRecipients.length,
+          senderIdentity: sendResult.sender,
+          costGHS: sendResult.costGHS,
+          error: sendResult.message,
+          failureReason: sendResult.message,
+          statusCode: sendResult.statusCode,
+          arkeselResponse: sendResult.rawResponse,
+          providerResponse: `HTTP ${sendResult.statusCode} Gateway Error: ${sendResult.message}`,
+          performance: {
+            prepMs: prepTimeMs,
+            arkeselGatewayMs,
+            totalBackendMs,
+            lifecycle: 'FAILED'
+          },
+          timestamp: new Date().toISOString()
         });
+      }
+    } catch (err: any) {
+      const totalBackendMs = Number((performance.now() - reqStartTime).toFixed(1));
+      return res.status(200).json({
+        success: false,
+        status: 'failed',
+        error: `Server Execution Error: ${err?.message || 'Failed to dispatch SMS'}`,
+        performance: { totalBackendMs, lifecycle: 'FAILED' }
+      });
+    }
+  });
+
+  // Dedicated High-Throughput Bulk SMS Dispatch Endpoint
+  app.post('/api/communication/send-bulk-sms', async (req, res) => {
+    const reqStartTime = performance.now();
+    try {
+      const {
+        schoolId,
+        schoolName,
+        approvedSenderId,
+        recipients,
+        message,
+        category,
+        apiKey: clientProvidedKeySecret
+      } = req.body || {};
+
+      if (!schoolId) {
+        return res.status(200).json({ success: false, status: 'failed', error: 'Multi-Tenant Error: schoolId is required' });
+      }
+      if (!Array.isArray(recipients) || recipients.length === 0 || !message) {
+        return res.status(200).json({ success: false, status: 'failed', error: 'Recipients array and message body are required' });
+      }
+
+      const apiKey = (clientProvidedKeySecret || platformSmsConfig.apiKey || '').trim();
+      if (!apiKey) {
+        return res.status(200).json({ success: false, status: 'failed', error: 'SMS Gateway Not Configured.' });
+      }
+      if (!platformSmsConfig.isActive) {
+        return res.status(200).json({ success: false, status: 'failed', error: 'Platform SMS Gateway is currently disabled.' });
+      }
+
+      // Filter and normalize all numbers
+      const validNumbers: string[] = [];
+      for (const r of recipients) {
+        const p = normalizeGhanaPhoneNumber(r);
+        if (p.isValid && p.formatted && !validNumbers.includes(p.formatted)) {
+          validNumbers.push(p.formatted);
+        }
+      }
+
+      if (validNumbers.length === 0) {
+        return res.status(200).json({ success: false, status: 'no_phone', error: 'No valid Ghanaian numbers (+233) found in recipients list' });
       }
 
       const sender = sanitizeSenderId(approvedSenderId || schoolName || platformSmsConfig.senderId || 'SCHOOLOS');
@@ -1003,49 +1294,65 @@ async function startServer() {
         finalMessage = `${schoolName}: ${finalMessage}`;
       }
 
-      const sendResult = await sendArkeselSMS({
-        apiKey,
-        apiUrl: platformSmsConfig.apiUrl,
-        sender,
-        recipient: phoneResult.formatted,
-        message: finalMessage,
-        schoolName
-      });
-
-      if (sendResult.success) {
-        return res.status(200).json({
-          success: true,
-          status: 'delivered',
-          logId: sendResult.logId,
-          provider: 'Arkesel SMS Gateway',
-          recipient: sendResult.recipient,
-          senderIdentity: sendResult.sender,
-          costGHS: sendResult.costGHS,
-          arkeselResponse: sendResult.rawResponse,
-          providerResponse: `HTTP 200 OK | Arkesel accepted SMS for ${sendResult.recipient}`,
-          timestamp: new Date().toISOString()
-        });
-      } else {
-        return res.status(200).json({
-          success: false,
-          status: 'failed',
-          logId: sendResult.logId,
-          provider: 'Arkesel SMS Gateway',
-          recipient: sendResult.recipient,
-          senderIdentity: sendResult.sender,
-          costGHS: sendResult.costGHS,
-          error: sendResult.message,
-          statusCode: sendResult.statusCode,
-          arkeselResponse: sendResult.rawResponse,
-          providerResponse: `HTTP ${sendResult.statusCode} Error: ${sendResult.message}`,
-          timestamp: new Date().toISOString()
-        });
+      // Batch in chunks of 100 for optimal gateway throughput
+      const CHUNK_SIZE = 100;
+      const chunks: string[][] = [];
+      for (let i = 0; i < validNumbers.length; i += CHUNK_SIZE) {
+        chunks.push(validNumbers.slice(i, i + CHUNK_SIZE));
       }
+
+      let totalSubmitted = 0;
+      let totalCostGHS = 0;
+      const batchResponses: any[] = [];
+
+      // Concurrently submit chunks (up to 3 concurrent chunk requests to respect Arkesel rate limits)
+      const submitChunk = async (chunkRecipients: string[]) => {
+        const sendResult = await sendArkeselSMS({
+          apiKey,
+          apiUrl: platformSmsConfig.apiUrl,
+          sender,
+          recipients: chunkRecipients,
+          message: finalMessage,
+          schoolName
+        });
+        if (sendResult.success) {
+          totalSubmitted += chunkRecipients.length;
+          totalCostGHS += sendResult.costGHS;
+        }
+        batchResponses.push({
+          recipientsCount: chunkRecipients.length,
+          success: sendResult.success,
+          message: sendResult.message
+        });
+      };
+
+      // Process chunks in controlled batches of 3
+      for (let i = 0; i < chunks.length; i += 3) {
+        const currentBatch = chunks.slice(i, i + 3);
+        await Promise.all(currentBatch.map(chunk => submitChunk(chunk)));
+      }
+
+      const totalBackendMs = Number((performance.now() - reqStartTime).toFixed(1));
+      console.log(`[Bulk SMS Perf] Submitted: ${totalSubmitted}/${validNumbers.length} in ${totalBackendMs}ms across ${chunks.length} batch(es)`);
+
+      return res.status(200).json({
+        success: totalSubmitted > 0,
+        status: totalSubmitted > 0 ? 'submitted' : 'failed',
+        totalRecipients: validNumbers.length,
+        submittedRecipients: totalSubmitted,
+        failedRecipients: validNumbers.length - totalSubmitted,
+        costGHS: Number(totalCostGHS.toFixed(2)),
+        performance: { totalBackendMs, batchCount: chunks.length, lifecycle: 'SUBMITTED' },
+        batchDetails: batchResponses,
+        timestamp: new Date().toISOString()
+      });
     } catch (err: any) {
+      const totalBackendMs = Number((performance.now() - reqStartTime).toFixed(1));
       return res.status(200).json({
         success: false,
         status: 'failed',
-        error: `Server Execution Error: ${err?.message || 'Failed to dispatch SMS'}`
+        error: `Server Execution Error: ${err?.message || 'Failed to dispatch bulk SMS'}`,
+        performance: { totalBackendMs, lifecycle: 'FAILED' }
       });
     }
   });

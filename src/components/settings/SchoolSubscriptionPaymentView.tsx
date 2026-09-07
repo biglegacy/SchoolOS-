@@ -57,13 +57,14 @@ export const SchoolSubscriptionPaymentView: React.FC = () => {
     id: 'plan_basic',
     name: 'BASIC',
     code: 'basic',
-    priceGHS: 350,
+    priceGHS: 1500,
+    smsAllowance: 500,
     features: [],
     studentLimit: 250,
     description: 'Basic institutional tier'
   };
 
-  const authoritativePriceGHS = currentPlan.priceGHS || 350;
+  const authoritativePriceGHS = currentPlan.priceGHS || 1500;
   const currentAcademicYear = school?.currentAcademicYear || '2025/2026';
   const currentTerm = school?.currentTerm || 'Term 2';
 
@@ -197,11 +198,17 @@ export const SchoolSubscriptionPaymentView: React.FC = () => {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 pt-2 text-xs">
+            <div className="grid grid-cols-3 gap-3 pt-2 text-xs">
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                <div className="text-[10px] text-slate-400 font-bold uppercase">Enrolled Students</div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase">Enrolled Capacity</div>
                 <div className="text-sm font-bold text-slate-800 font-mono mt-0.5">
                   Up to {currentPlan.studentLimit} Students
+                </div>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <div className="text-[10px] text-teal-800 font-bold uppercase">SMS Allowance</div>
+                <div className="text-sm font-bold text-teal-900 font-mono mt-0.5">
+                  {(currentPlan.smsAllowance || 500).toLocaleString()} Credits/Term
                 </div>
               </div>
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">

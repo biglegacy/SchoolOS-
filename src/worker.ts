@@ -33,6 +33,14 @@ let runtimeSmsConfig = {
   isActive: true
 };
 
+// Worker Idempotency Map for duplicate suppression
+const IDEMPOTENT_WORKER_SMS_REGISTRY = new Map<string, {
+  status: 'processing' | 'accepted' | 'delivered' | 'failed';
+  messageId: string;
+  result?: any;
+  createdAt: number;
+}>();
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
@@ -114,7 +122,45 @@ export default {
       }
     }
 
-    // 5. Test Arkesel API Key / Balance endpoint (GET https://sms.arkesel.com/api/v2/clients/balance-details)
+    // 5. Dedicated Arkesel Balance Check (GET & POST)
+    if (url.pathname === '/api/communication/balance' && (method === 'GET' || method === 'POST')) {
+      try {
+        let body: any = {};
+        if (method === 'POST') {
+          try { body = await request.json(); } catch { body = {}; }
+        }
+        const apiKey = (body.apiKey || url.searchParams.get('apiKey') || effectiveApiKey).trim();
+        const apiUrl = (body.apiUrl || url.searchParams.get('apiUrl') || 'https://sms.arkesel.com/api/v2/clients/balance-details').trim();
+
+        if (!apiKey) {
+          return jsonResponse({
+            success: false,
+            statusCode: 400,
+            error: 'Arkesel API Key is not configured. Please configure it in Super Admin platform settings.'
+          });
+        }
+
+        const balanceResult = await checkArkeselBalance(apiKey, apiUrl);
+        return jsonResponse({
+          success: balanceResult.success,
+          statusCode: balanceResult.statusCode,
+          smsBalance: balanceResult.balance,
+          mainBalance: balanceResult.mainBalance,
+          currency: 'GHS',
+          message: balanceResult.message,
+          rawResponse: balanceResult.rawResponse,
+          checkedAt: new Date().toISOString()
+        });
+      } catch (err: any) {
+        return jsonResponse({
+          success: false,
+          statusCode: 500,
+          error: `Worker Balance Error: ${err?.message || 'Failed to retrieve balance'}`
+        });
+      }
+    }
+
+    // 5b. Test Arkesel API Key / Balance endpoint (GET https://sms.arkesel.com/api/v2/clients/balance-details)
     if (url.pathname === '/api/communication/test-key' && method === 'POST') {
       try {
         let body: any = {};
@@ -243,7 +289,7 @@ export default {
       }
     }
 
-    // 7. Multi-Tenant Send SMS Endpoint
+    // 7. Multi-Tenant Send SMS Endpoint with Idempotency Protection
     if (url.pathname === '/api/communication/send-sms' && method === 'POST') {
       try {
         const body: any = await request.json();
@@ -256,7 +302,9 @@ export default {
           message,
           category,
           relatedRecordId,
-          apiKey: clientProvidedKey
+          idempotencyKey: clientProvidedKey,
+          messageId: clientMessageId,
+          apiKey: clientProvidedKeySecret
         } = body;
 
         if (!schoolId) {
@@ -275,7 +323,7 @@ export default {
           }, 400);
         }
 
-        const apiKey = (clientProvidedKey || effectiveApiKey).trim();
+        const apiKey = (clientProvidedKeySecret || effectiveApiKey).trim();
         if (!apiKey) {
           return jsonResponse({
             success: false,
@@ -296,7 +344,7 @@ export default {
         if (!phoneResult.isValid || !phoneResult.formatted) {
           return jsonResponse({
             success: false,
-            status: 'failed',
+            status: 'no_phone',
             error: `Invalid Ghanaian Phone Number: ${phoneResult.error || 'Must be a valid Ghanaian number formatted with +233.'}`
           });
         }
@@ -309,6 +357,39 @@ export default {
           finalMessage = `${schoolName}: ${finalMessage}`;
         }
 
+        // Idempotency check
+        const effectiveKey = clientProvidedKey || `sms_${schoolId}_${category || 'notif'}_${relatedRecordId || ''}_${formattedRecipient}`;
+        const existing = IDEMPOTENT_WORKER_SMS_REGISTRY.get(effectiveKey);
+        if (existing) {
+          if (existing.status === 'processing') {
+            return jsonResponse({
+              success: true,
+              status: 'accepted',
+              messageId: existing.messageId,
+              idempotencyKey: effectiveKey,
+              duplicateSuppressed: true,
+              providerResponse: 'SMS is currently in-flight and accepted by gateway (Duplicate Suppressed)',
+              timestamp: new Date().toISOString()
+            });
+          }
+          if (existing.status === 'accepted' || existing.status === 'delivered') {
+            return jsonResponse({
+              ...existing.result,
+              duplicateSuppressed: true
+            });
+          }
+        }
+
+        const messageId = clientMessageId || `MSG-${Date.now()}`;
+        IDEMPOTENT_WORKER_SMS_REGISTRY.set(effectiveKey, {
+          status: 'processing',
+          messageId,
+          createdAt: Date.now()
+        });
+
+        const charCount = finalMessage.length;
+        const smsSegments = charCount <= 160 ? 1 : Math.ceil(charCount / 153);
+
         const sendResult = await sendArkeselSMS({
           apiKey,
           apiUrl: effectiveApiUrl,
@@ -319,29 +400,52 @@ export default {
         });
 
         if (sendResult.success) {
-          return jsonResponse({
+          const responseData = {
             success: true,
-            status: 'delivered',
+            status: 'accepted',
+            messageId,
+            idempotencyKey: effectiveKey,
             logId: sendResult.logId,
             costGHS: sendResult.costGHS,
-            providerResponse: `HTTP 200 OK | Arkesel SMS accepted for ${formattedRecipient}`,
+            smsSegments,
+            providerResponse: `HTTP 200 OK | Arkesel SMS accepted for ${formattedRecipient} (${smsSegments} segment${smsSegments > 1 ? 's' : ''})`,
             provider: 'Arkesel SMS Gateway',
             recipient: formattedRecipient,
             sender,
-            arkeselResponse: sendResult.rawResponse
+            arkeselResponse: sendResult.rawResponse,
+            timestamp: new Date().toISOString()
+          };
+
+          IDEMPOTENT_WORKER_SMS_REGISTRY.set(effectiveKey, {
+            status: 'accepted',
+            messageId,
+            result: responseData,
+            createdAt: Date.now()
           });
+
+          return jsonResponse(responseData);
         } else {
+          IDEMPOTENT_WORKER_SMS_REGISTRY.set(effectiveKey, {
+            status: 'failed',
+            messageId,
+            createdAt: Date.now()
+          });
+
           return jsonResponse({
             success: false,
             status: 'failed',
+            messageId,
+            idempotencyKey: effectiveKey,
             logId: sendResult.logId,
             costGHS: sendResult.costGHS,
             error: sendResult.message,
+            failureReason: sendResult.message,
             provider: 'Arkesel SMS Gateway',
             recipient: formattedRecipient,
             sender,
             statusCode: sendResult.statusCode,
-            arkeselResponse: sendResult.rawResponse
+            arkeselResponse: sendResult.rawResponse,
+            timestamp: new Date().toISOString()
           });
         }
       } catch (err: any) {

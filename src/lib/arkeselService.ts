@@ -21,7 +21,8 @@ export interface ArkeselSendParams {
   apiKey: string;
   apiUrl?: string;
   sender?: string;
-  recipient: string;
+  recipient?: string;
+  recipients?: string[];
   message: string;
   schoolName?: string;
 }
@@ -29,11 +30,15 @@ export interface ArkeselSendParams {
 export interface ArkeselSendResult {
   success: boolean;
   statusCode: number;
+  status?: 'submitted' | 'accepted' | 'failed';
   message: string;
   recipient: string;
+  recipients?: string[];
+  recipientCount?: number;
   sender: string;
   logId: string;
   costGHS: number;
+  gatewayLatencyMs?: number;
   rawResponse?: any;
   arkeselData?: any;
   errorDetails?: string;
@@ -52,7 +57,7 @@ export interface ArkeselBalanceResult {
 const DEFAULT_ARKESEL_SMS_URL = 'https://sms.arkesel.com/api/v2/sms/send';
 const DEFAULT_ARKESEL_BALANCE_URL = 'https://sms.arkesel.com/api/v2/clients/balance-details';
 const DEFAULT_SENDER_ID = 'SCHOOLOS';
-const REQUEST_TIMEOUT_MS = 25000;
+const REQUEST_TIMEOUT_MS = 8000; // 8 seconds responsive timeout prevents blocking while allowing gateway turnaround
 
 /**
  * Strips accidental prefixes (such as 'Bearer ', 'api-key:', quotes) from an Arkesel API key
@@ -267,7 +272,7 @@ export async function checkArkeselBalance(
  * Calls POST https://sms.arkesel.com/api/v2/sms/send
  */
 export async function sendArkeselSMS(params: ArkeselSendParams): Promise<ArkeselSendResult> {
-  const { apiKey, apiUrl, sender, recipient, message, schoolName } = params;
+  const { apiKey, apiUrl, sender, recipient, recipients: rawRecipients, message, schoolName } = params;
   const logId = `COMM-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
   // 1. Validate API Key
@@ -276,6 +281,7 @@ export async function sendArkeselSMS(params: ArkeselSendParams): Promise<Arkesel
     return {
       success: false,
       statusCode: 400,
+      status: 'failed',
       message: 'Validation Error: Arkesel API Key is required. Please configure it in Super Admin platform settings.',
       recipient: recipient || '',
       sender: sender || DEFAULT_SENDER_ID,
@@ -285,13 +291,30 @@ export async function sendArkeselSMS(params: ArkeselSendParams): Promise<Arkesel
     };
   }
 
-  // 2. Normalize Ghanaian Phone Number to international +233 format
-  const phoneResult = normalizeGhanaPhoneNumber(recipient);
-  if (!phoneResult.isValid || !phoneResult.formatted) {
+  // 2. Normalize Ghanaian Phone Numbers to international +233 format
+  const recipientList: string[] = [];
+  if (Array.isArray(rawRecipients) && rawRecipients.length > 0) {
+    for (const r of rawRecipients) {
+      if (r && typeof r === 'string' && r.trim()) {
+        const norm = normalizeGhanaPhoneNumber(r);
+        if (norm.isValid && norm.formatted) {
+          recipientList.push(norm.formatted);
+        }
+      }
+    }
+  } else if (recipient) {
+    const norm = normalizeGhanaPhoneNumber(recipient);
+    if (norm.isValid && norm.formatted) {
+      recipientList.push(norm.formatted);
+    }
+  }
+
+  if (recipientList.length === 0) {
     return {
       success: false,
       statusCode: 400,
-      message: `Validation Error: ${phoneResult.error || 'Invalid Ghanaian phone number format.'}`,
+      status: 'failed',
+      message: 'Validation Error: At least one valid Ghanaian recipient phone number (+233) is required.',
       recipient: recipient || '',
       sender: sender || DEFAULT_SENDER_ID,
       logId,
@@ -300,7 +323,7 @@ export async function sendArkeselSMS(params: ArkeselSendParams): Promise<Arkesel
     };
   }
 
-  const formattedRecipient = phoneResult.formatted;
+  const primaryRecipient = recipientList[0];
 
   // 3. Validate and sanitize message and sender ID
   const finalMessage = (message || '').trim();
@@ -308,8 +331,9 @@ export async function sendArkeselSMS(params: ArkeselSendParams): Promise<Arkesel
     return {
       success: false,
       statusCode: 400,
+      status: 'failed',
       message: 'Validation Error: Message body cannot be empty.',
-      recipient: formattedRecipient,
+      recipient: primaryRecipient,
       sender: sender || DEFAULT_SENDER_ID,
       logId,
       costGHS: 0,
@@ -320,16 +344,18 @@ export async function sendArkeselSMS(params: ArkeselSendParams): Promise<Arkesel
   const finalSender = sanitizeSenderId(sender || schoolName || DEFAULT_SENDER_ID);
   const targetUrl = (!apiUrl || apiUrl.includes('hubtel')) ? DEFAULT_ARKESEL_SMS_URL : apiUrl.trim();
 
-  // 4. Calculate SMS cost in GH₵ (e.g. 0.04 GHS per 160-character segment)
+  // 4. Calculate SMS cost in GH₵ (0.04 GHS per 160-character segment per recipient)
   const smsSegments = Math.ceil(finalMessage.length / 160) || 1;
-  const costGHS = Number((smsSegments * 0.04).toFixed(2));
+  const costGHS = Number((smsSegments * 0.04 * recipientList.length).toFixed(2));
 
   // 5. Construct valid Arkesel v2 JSON payload
   const payload = {
     sender: finalSender,
     message: finalMessage,
-    recipients: [formattedRecipient]
+    recipients: recipientList
   };
+
+  const gatewayStartTime = performance.now();
 
   try {
     const controller = new AbortController();
@@ -349,6 +375,7 @@ export async function sendArkeselSMS(params: ArkeselSendParams): Promise<Arkesel
 
     clearTimeout(timer);
 
+    const gatewayLatencyMs = Math.round(performance.now() - gatewayStartTime);
     const statusCode = response.status;
     const responseText = await response.text();
     let rawJson: any = null;
@@ -374,11 +401,15 @@ export async function sendArkeselSMS(params: ArkeselSendParams): Promise<Arkesel
       return {
         success: true,
         statusCode: statusCode || 200,
-        message: `Arkesel Gateway Connected: SMS accepted by Arkesel and routed to ${formattedRecipient}.`,
-        recipient: formattedRecipient,
+        status: 'submitted', // Accepted by Arkesel gateway; carrier delivery proceeds independently
+        message: `Arkesel Gateway Connected: SMS accepted by Arkesel (${gatewayLatencyMs}ms) and queued for carrier delivery to ${recipientList.length} recipient${recipientList.length > 1 ? 's' : ''}.`,
+        recipient: primaryRecipient,
+        recipients: recipientList,
+        recipientCount: recipientList.length,
         sender: finalSender,
         logId,
         costGHS,
+        gatewayLatencyMs,
         rawResponse: rawJson,
         arkeselData: rawJson?.data
       };
@@ -388,28 +419,37 @@ export async function sendArkeselSMS(params: ArkeselSendParams): Promise<Arkesel
     return {
       success: false,
       statusCode,
+      status: 'failed',
       message: errorMsg,
-      recipient: formattedRecipient,
+      recipient: primaryRecipient,
+      recipients: recipientList,
+      recipientCount: recipientList.length,
       sender: finalSender,
       logId,
       costGHS,
+      gatewayLatencyMs,
       rawResponse: rawJson || { rawBody: responseText },
       errorDetails: errorMsg
     };
   } catch (err: any) {
+    const gatewayLatencyMs = Math.round(performance.now() - gatewayStartTime);
     const isTimeout = err?.name === 'AbortError' || err?.name === 'TimeoutError' || err?.message?.includes('timeout');
     const errorMsg = isTimeout
-      ? 'Arkesel SMS Gateway connection timed out after 12 seconds. Upstream gateway did not respond in time.'
+      ? `Arkesel SMS Gateway connection timed out after ${(REQUEST_TIMEOUT_MS / 1000).toFixed(0)}s. Upstream gateway did not respond in time.`
       : `Network Error: Could not connect to Arkesel SMS gateway: ${err?.message || 'Connection failed'}`;
 
     return {
       success: false,
       statusCode: isTimeout ? 504 : 502,
+      status: 'failed',
       message: errorMsg,
-      recipient: formattedRecipient,
+      recipient: primaryRecipient,
+      recipients: recipientList,
+      recipientCount: recipientList.length,
       sender: finalSender,
       logId,
       costGHS,
+      gatewayLatencyMs,
       rawResponse: { error: err?.message || 'NETWORK_ERROR', isTimeout },
       errorDetails: errorMsg
     };

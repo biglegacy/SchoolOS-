@@ -22,6 +22,7 @@ import { SuperAdminCommunicationAPI } from './SuperAdminCommunicationAPI';
 import { SuperAdminPaystackSettings } from './SuperAdminPaystackSettings';
 import { SchoolRegistrationModal } from '../auth/SchoolRegistrationModal';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { sendCentralCommunication } from '../../lib/communicationService';
 
 interface SuperAdminViewProps {
   onImpersonateSchool?: (schoolId: string) => void;
@@ -274,7 +275,36 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
           schools={allSchools}
           communicationSettings={platformCommunication}
           onSendBroadcast={async ({ recipientGroup, message, senderId }) => {
-            showNotification(`SMS broadcast sent to ${recipientGroup.replace('_', ' ')}.`);
+            const targets = allSchools.filter(s => {
+              if (recipientGroup === 'all_schools') return true;
+              if (recipientGroup === 'active_schools') return s.status === 'active';
+              if (recipientGroup === 'pending_schools') return s.status === 'pending';
+              if (recipientGroup === 'suspended_schools') return s.status === 'suspended';
+              return true;
+            });
+            const validTargets = targets.filter(s => Boolean(s.registeredPhone || s.phone));
+            const results = await Promise.allSettled(
+              validTargets.map(s => {
+                const phone = s.registeredPhone || s.phone;
+                return sendCentralCommunication(
+                  {
+                    schoolId: s.id,
+                    schoolName: s.name,
+                    registeredPhone: phone,
+                    type: 'sms',
+                    recipient: phone,
+                    recipientName: s.contactPerson || s.name,
+                    message,
+                    category: 'announcement',
+                    relatedRecordId: `SA-BROADCAST-${Date.now()}`
+                  },
+                  s,
+                  platformCommunication
+                );
+              })
+            );
+            const sentCount = results.filter(r => r.status === 'fulfilled').length;
+            showNotification(`SMS broadcast submitted for ${sentCount} institutions via Arkesel gateway.`);
           }}
         />
       )}
