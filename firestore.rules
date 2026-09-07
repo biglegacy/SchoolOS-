@@ -76,7 +76,8 @@ service cloud.firestore {
     // Schools Collection
     // -------------------------------------------------------------
     match /schools/{schoolId} {
-      allow read, write: if true;
+      allow read, create, update: if true;
+      allow delete: if isSuperAdmin();
     }
 
     // -------------------------------------------------------------
@@ -172,7 +173,8 @@ service cloud.firestore {
     // Settings & Platform Configurations
     // -------------------------------------------------------------
     match /schoolSettings/{schoolId} {
-      allow read, write: if true;
+      allow read, create, update: if true;
+      allow delete: if isSuperAdmin();
     }
 
     match /platformSettings/{docId} {
