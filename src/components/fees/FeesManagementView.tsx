@@ -20,6 +20,7 @@ import { StatCard } from '../common/StatCard';
 import { Modal } from '../common/Modal';
 import { formatGHS, formatDate, formatGhanaPhone } from '../../utils/formatting';
 import { GhanaFlagBadge } from '../common/EmptyState';
+import { DefaultersBroadcastSection } from '../communications/DefaultersBroadcastSection';
 
 export const FeesManagementView: React.FC = () => {
   const { 
@@ -52,6 +53,7 @@ export const FeesManagementView: React.FC = () => {
   const [payerName, setPayerName] = useState('');
   const [payerPhone, setPayerPhone] = useState('');
   const [remarks, setRemarks] = useState('Term 3 Fees Part Payment');
+  const [showDefaultersModal, setShowDefaultersModal] = useState(false);
 
   const rawSummaries = getStudentFeeSummaries ? getStudentFeeSummaries() : [];
   const feeSummaries = Array.isArray(rawSummaries) ? rawSummaries : [];
@@ -154,22 +156,8 @@ export const FeesManagementView: React.FC = () => {
     setTimeout(() => setActionSuccess(null), 4000);
   };
 
-  const handleSendDefaultersSMS = async () => {
-    const defaulters = feeSummaries.filter(f => (f.amountOwing ?? f.balance ?? 0) > 0);
-    if (defaulters.length === 0) {
-      alert('No fee defaulters found.');
-      return;
-    }
-
-    if (window.confirm(`Send urgent SMS payment reminder to all ${defaulters.length} guardians with outstanding fee balances?`)) {
-      await sendSMSBroadcast(
-        'fee_defaulters',
-        `Dear Parent, this is a kind reminder that your ward has an outstanding school fee balance for Term 3. Please settle via MTN MoMo / Telecel Cash or at the school accounts office. Thank you.`,
-        defaulters.length
-      );
-      setActionSuccess(`Broadcast SMS sent to ${defaulters.length} guardian phone numbers!`);
-      setTimeout(() => setActionSuccess(null), 4000);
-    }
+  const handleSendDefaultersSMS = () => {
+    setShowDefaultersModal(true);
   };
 
   const getStatusBadge = (status?: string, paymentStatus?: string) => {
@@ -681,6 +669,27 @@ export const FeesManagementView: React.FC = () => {
                 Done
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Defaulters SMS Broadcast Modal */}
+      {showDefaultersModal && (
+        <Modal
+          isOpen={showDefaultersModal}
+          onClose={() => setShowDefaultersModal(false)}
+          title="Defaulters SMS Broadcast Manager"
+          subtitle="Selective or bulk payment notices via Arkesel Gateway with live fee balances"
+          maxWidth="5xl"
+        >
+          <div className="py-2">
+            <DefaultersBroadcastSection 
+              onSuccessNavigate={() => {
+                setShowDefaultersModal(false);
+                setActionSuccess("Defaulters broadcast dispatch completed and logged!");
+                setTimeout(() => setActionSuccess(null), 5000);
+              }} 
+            />
           </div>
         </Modal>
       )}

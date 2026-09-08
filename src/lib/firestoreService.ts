@@ -7,9 +7,12 @@ import {
   deleteDoc, 
   onSnapshot, 
   writeBatch,
+  query,
+  where,
   Unsubscribe
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
+import { deleteSchoolLogoFile } from './imageStorage';
 import { 
   School, 
   UserProfile, 
@@ -24,6 +27,8 @@ import {
   FeePayment, 
   StoreItem, 
   POSTransaction, 
+  POSStockMovement,
+  POSRefund,
   BroadcastMessage, 
   AuditLog, 
   SchoolSettings,
@@ -81,6 +86,8 @@ export const COLLECTIONS = {
   FEE_PAYMENTS: 'feePayments',
   STORE_ITEMS: 'storeItems',
   POS_TRANSACTIONS: 'posTransactions',
+  POS_STOCK_MOVEMENTS: 'posStockMovements',
+  POS_REFUNDS: 'posRefunds',
   MESSAGES: 'messages',
   AUDIT_LOGS: 'auditLogs',
   COMMUNICATION_LOGS: 'communicationLogs',
@@ -349,6 +356,22 @@ function startGlobalFirestoreListeners() {
     }, (err) => handleSyncError('posTransactions', err))
   );
 
+  // POS Stock Movements listener
+  unsubs.push(
+    onSnapshot(collection(db, COLLECTIONS.POS_STOCK_MOVEMENTS), (snapshot) => {
+      const posStockMovements = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as POSStockMovement));
+      notifyAllSubscribers({ posStockMovements });
+    }, (err) => handleSyncError('posStockMovements', err))
+  );
+
+  // POS Refunds listener
+  unsubs.push(
+    onSnapshot(collection(db, COLLECTIONS.POS_REFUNDS), (snapshot) => {
+      const posRefunds = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as POSRefund));
+      notifyAllSubscribers({ posRefunds });
+    }, (err) => handleSyncError('posRefunds', err))
+  );
+
   // Messages listener
   unsubs.push(
     onSnapshot(collection(db, COLLECTIONS.MESSAGES), (snapshot) => {
@@ -475,6 +498,91 @@ export async function fsUpdateSchool(schoolId: string, data: Partial<School>): P
     }));
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `/${COLLECTIONS.SCHOOLS}/${schoolId}`);
+  }
+}
+
+/**
+ * Super Admin Authoritative School & Tenant Data Purge.
+ * Completely cleans up all related collections belonging to the target schoolId,
+ * the schoolSettings document, the school profile document, and storage logos.
+ */
+export async function fsDeleteSchool(
+  schoolId: string, 
+  schoolLogoUrl?: string
+): Promise<{ success: boolean; deletedCounts: Record<string, number> }> {
+  if (!db || !schoolId) {
+    return { success: true, deletedCounts: {} };
+  }
+
+  const deletedCounts: Record<string, number> = {};
+
+  try {
+    // 1. Clean up all tenant-specific records matching schoolId
+    const tenantCollections = [
+      COLLECTIONS.USERS,
+      COLLECTIONS.STUDENTS,
+      COLLECTIONS.TEACHERS,
+      COLLECTIONS.CLASSROOMS,
+      COLLECTIONS.SUBJECTS,
+      COLLECTIONS.ATTENDANCE,
+      COLLECTIONS.EXAMINATIONS,
+      COLLECTIONS.RESULTS,
+      COLLECTIONS.FEE_STRUCTURES,
+      COLLECTIONS.FEE_PAYMENTS,
+      COLLECTIONS.STORE_ITEMS,
+      COLLECTIONS.POS_TRANSACTIONS,
+      COLLECTIONS.POS_STOCK_MOVEMENTS,
+      COLLECTIONS.POS_REFUNDS,
+      COLLECTIONS.MESSAGES,
+      COLLECTIONS.COMMUNICATION_LOGS,
+      COLLECTIONS.SMS_MESSAGES,
+      COLLECTIONS.SUBSCRIPTION_TRANSACTIONS
+    ];
+
+    for (const collName of tenantCollections) {
+      try {
+        const q = query(collection(db, collName), where('schoolId', '==', schoolId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          deletedCounts[collName] = snap.size;
+          const docs = snap.docs;
+          for (let i = 0; i < docs.length; i += 400) {
+            const batch = writeBatch(db);
+            const chunk = docs.slice(i, i + 400);
+            chunk.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
+        }
+      } catch (collErr) {
+        console.warn(`[Firestore Purge] Note on cleaning collection ${collName} for school ${schoolId}:`, collErr);
+      }
+    }
+
+    // 2. Delete schoolSettings document
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.SCHOOL_SETTINGS, schoolId));
+      deletedCounts[COLLECTIONS.SCHOOL_SETTINGS] = 1;
+    } catch (err) {
+      console.warn(`[Firestore Purge] Note on deleting schoolSettings for ${schoolId}:`, err);
+    }
+
+    // 3. Delete school document itself (Secured by firestore.rules: allow delete: if isSuperAdmin();)
+    await deleteDoc(doc(db, COLLECTIONS.SCHOOLS, schoolId));
+    deletedCounts[COLLECTIONS.SCHOOLS] = 1;
+
+    // 4. Clean up logo asset in Firebase Storage if present
+    if (schoolLogoUrl) {
+      try {
+        await deleteSchoolLogoFile(schoolLogoUrl);
+      } catch (storageErr) {
+        console.warn(`[Storage Purge] Note on deleting school logo for ${schoolId}:`, storageErr);
+      }
+    }
+
+    return { success: true, deletedCounts };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `/${COLLECTIONS.SCHOOLS}/${schoolId}`);
+    throw error;
   }
 }
 
@@ -669,12 +777,51 @@ export async function fsUpdateStoreItem(itemId: string, data: Partial<StoreItem>
   }
 }
 
+export async function fsDeleteStoreItem(itemId: string): Promise<void> {
+  if (!db) return;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.STORE_ITEMS, itemId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `/${COLLECTIONS.STORE_ITEMS}/${itemId}`);
+  }
+}
+
 export async function fsRecordPOSTransaction(tx: POSTransaction): Promise<void> {
   if (!db) return;
   try {
     await setDoc(doc(db, COLLECTIONS.POS_TRANSACTIONS, tx.id), sanitizeForFirestore(tx));
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `/${COLLECTIONS.POS_TRANSACTIONS}/${tx.id}`);
+  }
+}
+
+export async function fsUpdatePOSTransaction(txId: string, data: Partial<POSTransaction>): Promise<void> {
+  if (!db) return;
+  try {
+    await updateDoc(doc(db, COLLECTIONS.POS_TRANSACTIONS, txId), sanitizeForFirestore({
+      ...data,
+      updatedAt: new Date().toISOString()
+    }));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `/${COLLECTIONS.POS_TRANSACTIONS}/${txId}`);
+  }
+}
+
+export async function fsRecordPOSStockMovement(movement: POSStockMovement): Promise<void> {
+  if (!db) return;
+  try {
+    await setDoc(doc(db, COLLECTIONS.POS_STOCK_MOVEMENTS, movement.id), sanitizeForFirestore(movement));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `/${COLLECTIONS.POS_STOCK_MOVEMENTS}/${movement.id}`);
+  }
+}
+
+export async function fsRecordPOSRefund(refund: POSRefund): Promise<void> {
+  if (!db) return;
+  try {
+    await setDoc(doc(db, COLLECTIONS.POS_REFUNDS, refund.id), sanitizeForFirestore(refund));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `/${COLLECTIONS.POS_REFUNDS}/${refund.id}`);
   }
 }
 

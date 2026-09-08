@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Building2, 
   Search, 
@@ -21,11 +21,14 @@ import {
   PlusCircle,
   Edit2,
   PowerOff,
-  Sparkles
+  Sparkles,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { School, SubscriptionTier } from '../../types';
 import { formatDate, formatGHS } from '../../utils/formatting';
 import { Modal } from '../common/Modal';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SuperAdminSchoolsProps {
   schools: School[];
@@ -34,6 +37,7 @@ interface SuperAdminSchoolsProps {
   onApproveSchool: (schoolId: string) => Promise<void>;
   onRejectSchool: (schoolId: string) => Promise<void>;
   onSuspendSchool: (schoolId: string) => Promise<void>;
+  onDeleteSchool?: (schoolId: string) => Promise<void>;
   onUpdateSchool?: (schoolId: string, data: Partial<School>) => Promise<void>;
   onAssignPlan: (schoolId: string, planId: string) => Promise<void>;
   onImpersonateSchool: (schoolId: string) => void;
@@ -48,12 +52,16 @@ export const SuperAdminSchools: React.FC<SuperAdminSchoolsProps> = ({
   onApproveSchool,
   onRejectSchool,
   onSuspendSchool,
+  onDeleteSchool,
   onUpdateSchool,
   onAssignPlan,
   onImpersonateSchool,
   onOpenOverrides,
   onOpenSchoolRegistration
 }) => {
+  const { currentUser } = useAuth();
+  const isSuperAdmin = currentUser?.role === 'superAdmin' || (currentUser?.role as string) === 'SUPER_ADMIN';
+
   const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'suspended'>(initialFilter);
   const [searchTerm, setSearchTerm] = useState('');
   const [reviewSchool, setReviewSchool] = useState<School | null>(null);
@@ -61,6 +69,73 @@ export const SuperAdminSchools: React.FC<SuperAdminSchoolsProps> = ({
   const [planModalSchool, setPlanModalSchool] = useState<School | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  // Super Admin School Deletion Modal State
+  const [deleteModalSchool, setDeleteModalSchool] = useState<School | null>(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [deleteConfirmedCheckbox, setDeleteConfirmedCheckbox] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string | null>(null);
+  const isDeletingRef = useRef(false);
+
+  const isConfirmTextMatch = 
+    deleteModalSchool && (
+      deleteConfirmationText.trim().toLowerCase() === deleteModalSchool.name.trim().toLowerCase() ||
+      deleteConfirmationText.trim().toUpperCase() === 'DELETE'
+    );
+  const isConfirmValid = Boolean((isConfirmTextMatch || deleteConfirmedCheckbox) && deleteModalSchool);
+
+  const handleExecuteDelete = async () => {
+    if (!deleteModalSchool || isDeleting || isDeletingRef.current) return;
+    if (!isSuperAdmin) {
+      setDeleteError('Unauthorized: Only Super Administrators can delete schools.');
+      return;
+    }
+    if (!isConfirmValid) {
+      setDeleteError('Please check the confirmation box or type DELETE/school name to confirm.');
+      return;
+    }
+
+    try {
+      isDeletingRef.current = true;
+      setIsDeleting(true);
+      setDeleteError(null);
+
+      if (onDeleteSchool) {
+        await onDeleteSchool(deleteModalSchool.id);
+      }
+
+      const deletedName = deleteModalSchool.name;
+      setDeleteSuccessMessage(`School "${deletedName}" and all associated records have been permanently deleted.`);
+      setTimeout(() => {
+        setDeleteSuccessMessage(null);
+      }, 5000);
+
+      if (reviewSchool?.id === deleteModalSchool.id) {
+        setReviewSchool(null);
+      }
+
+      setDeleteModalSchool(null);
+      setDeleteConfirmationText('');
+      setDeleteConfirmedCheckbox(false);
+    } catch (err: any) {
+      console.error('Delete school error:', err);
+      let displayMsg = err.message || 'Failed to delete school. Please check your network and permissions and try again.';
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed?.error) {
+          displayMsg = parsed.error;
+        }
+      } catch {
+        // Not a JSON string error
+      }
+      setDeleteError(displayMsg);
+    } finally {
+      setIsDeleting(false);
+      isDeletingRef.current = false;
+    }
+  };
 
   const pendingCount = (schools || []).filter(s => s.status === 'pending').length;
   const activeCount = (schools || []).filter(s => s.status === 'active').length;
@@ -147,6 +222,23 @@ export const SuperAdminSchools: React.FC<SuperAdminSchoolsProps> = ({
           </button>
         )}
       </div>
+
+      {/* Super Admin Action Notification */}
+      {deleteSuccessMessage && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-950 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>{deleteSuccessMessage}</span>
+          </div>
+          <button 
+            onClick={() => setDeleteSuccessMessage(null)} 
+            className="text-emerald-700 hover:text-emerald-950 cursor-pointer p-1"
+            title="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Top Filter Bar & Search */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -343,6 +435,23 @@ export const SuperAdminSchools: React.FC<SuperAdminSchoolsProps> = ({
                         <span>Unsuspend</span>
                       </button>
                     )}
+
+                    {/* Mobile Super Admin Delete Action */}
+                    {isSuperAdmin && (
+                      <button
+                        onClick={() => {
+                          setDeleteError(null);
+                          setDeleteConfirmationText('');
+                          setDeleteConfirmedCheckbox(false);
+                          setDeleteModalSchool(school);
+                        }}
+                        className="p-2 text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-lg cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center border border-rose-200 transition-colors"
+                        title={`Permanently Delete ${school.name}`}
+                        aria-label={`Delete ${school.name}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -515,6 +624,23 @@ export const SuperAdminSchools: React.FC<SuperAdminSchoolsProps> = ({
                             </button>
                           )}
 
+                          {/* Super Admin Permanent Delete Action */}
+                          {isSuperAdmin && (
+                            <button
+                              onClick={() => {
+                                setDeleteError(null);
+                                setDeleteConfirmationText('');
+                                setDeleteConfirmedCheckbox(false);
+                                setDeleteModalSchool(school);
+                              }}
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-rose-200"
+                              title={`Permanently Delete ${school.name}`}
+                              aria-label={`Delete ${school.name}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
                         </div>
                       </td>
 
@@ -636,6 +762,23 @@ export const SuperAdminSchools: React.FC<SuperAdminSchoolsProps> = ({
             {/* Modal Actions */}
             <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
+                {isSuperAdmin && (
+                  <button
+                    onClick={() => {
+                      const s = reviewSchool;
+                      setDeleteError(null);
+                      setDeleteConfirmationText('');
+                      setDeleteConfirmedCheckbox(false);
+                      setDeleteModalSchool(s);
+                    }}
+                    className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Permanently Delete School"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete School</span>
+                  </button>
+                )}
+
                 {reviewSchool.status === 'active' && (
                   <>
                     <button
@@ -881,6 +1024,133 @@ export const SuperAdminSchools: React.FC<SuperAdminSchoolsProps> = ({
                 className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs"
               >
                 Save Plan Assignment
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Super Admin Authoritative Delete School Confirmation Modal */}
+      {deleteModalSchool && (
+        <Modal
+          isOpen={!!deleteModalSchool}
+          onClose={() => {
+            if (!isDeleting) {
+              setDeleteModalSchool(null);
+              setDeleteConfirmationText('');
+              setDeleteConfirmedCheckbox(false);
+              setDeleteError(null);
+            }
+          }}
+          title="Delete School?"
+          subtitle="Irreversible Administrative Action"
+          maxWidth="lg"
+        >
+          <div className="space-y-4">
+            {/* Warning Message Box */}
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-rose-900 space-y-1">
+                <p className="font-bold text-rose-950">
+                  You are about to permanently delete {deleteModalSchool.name} and its associated data. This action cannot be undone.
+                </p>
+                <p className="leading-relaxed">
+                  All associated tenant data will be permanently wiped, including student and staff accounts, classrooms, fee structures, financial transactions, attendance records, exam results, POS inventory, and communication logs.
+                </p>
+              </div>
+            </div>
+
+            {/* School Identification Data */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-slate-200">
+                <span className="text-slate-500 font-medium">School Name</span>
+                <span className="font-bold text-slate-900">{deleteModalSchool.name}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-200">
+                <span className="text-slate-500 font-medium">School ID</span>
+                <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">{deleteModalSchool.id}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-200">
+                <span className="text-slate-500 font-medium">GES Registration</span>
+                <span className="font-mono font-medium text-slate-700">{deleteModalSchool.registrationNumber || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="text-slate-500 font-medium">Proprietor / Admin</span>
+                <span className="font-medium text-slate-800">{deleteModalSchool.ownerName || 'Admin'} ({deleteModalSchool.ownerPhone || deleteModalSchool.phone})</span>
+              </div>
+            </div>
+
+            {/* Confirmation Controls */}
+            <div className="space-y-3 pt-1">
+              <label className="flex items-start gap-2.5 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={deleteConfirmedCheckbox}
+                  onChange={(e) => setDeleteConfirmedCheckbox(e.target.checked)}
+                  disabled={isDeleting}
+                  className="mt-0.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
+                />
+                <span className="text-xs text-slate-700 font-medium leading-relaxed">
+                  I confirm that I want to permanently delete this school and erase all associated tenant records.
+                </span>
+              </label>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Type <span className="font-mono text-rose-700 font-bold">DELETE</span> or <span className="font-bold">"{deleteModalSchool.name}"</span> to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmationText}
+                  onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                  placeholder="Type DELETE or school name"
+                  disabled={isDeleting}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-rose-500 focus:border-rose-500 font-mono outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Error Display */}
+            {deleteError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteModalSchool(null);
+                  setDeleteConfirmationText('');
+                  setDeleteConfirmedCheckbox(false);
+                  setDeleteError(null);
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExecuteDelete}
+                disabled={!isConfirmValid || isDeleting}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-bold rounded-xl text-xs flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed transition-all shadow-sm"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete School</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

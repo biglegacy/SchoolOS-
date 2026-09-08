@@ -121,8 +121,8 @@ export async function sendCentralCommunication(
   try {
     if (!gatewayConfig.isActive) {
       console.warn(`[Communication Service] Platform ${type.toUpperCase()} Gateway is currently disabled in Super Admin Settings.`);
-      status = 'sent';
-      providerResponse = 'Provider gateway disabled in Super Admin settings. Message queued.';
+      status = 'failed';
+      providerResponse = 'SMS Gateway is currently disabled in Super Admin settings. Message was not dispatched.';
     } else if (isSMS) {
       // Dispatch to secure backend endpoint
       const res = await fetch('/api/communication/send-sms', {

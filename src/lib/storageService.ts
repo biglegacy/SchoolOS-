@@ -12,6 +12,8 @@ import {
   FeePayment, 
   StoreItem, 
   POSTransaction, 
+  POSStockMovement,
+  POSRefund,
   BroadcastMessage, 
   AuditLog, 
   SchoolSettings, 
@@ -61,6 +63,8 @@ export interface DatabaseState {
   feePayments: FeePayment[];
   storeItems: StoreItem[];
   posTransactions: POSTransaction[];
+  posStockMovements?: POSStockMovement[];
+  posRefunds?: POSRefund[];
   messages: BroadcastMessage[];
   auditLogs: AuditLog[];
   communicationLogs?: CommunicationLog[];
@@ -92,6 +96,12 @@ export const loadInitialDatabase = (): DatabaseState => {
         if (!parsed.communicationLogs) {
           parsed.communicationLogs = [];
         }
+        if (!parsed.posStockMovements) {
+          parsed.posStockMovements = [];
+        }
+        if (!parsed.posRefunds) {
+          parsed.posRefunds = [];
+        }
         if (!parsed.subscriptionTransactions) {
           parsed.subscriptionTransactions = INITIAL_SUBSCRIPTION_TRANSACTIONS;
         }
@@ -120,6 +130,8 @@ export const loadInitialDatabase = (): DatabaseState => {
     feePayments: INITIAL_FEE_PAYMENTS,
     storeItems: INITIAL_STORE_ITEMS,
     posTransactions: INITIAL_POS_TRANSACTIONS,
+    posStockMovements: [],
+    posRefunds: [],
     messages: INITIAL_MESSAGES,
     auditLogs: INITIAL_AUDIT_LOGS,
     communicationLogs: [],

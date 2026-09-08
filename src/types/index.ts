@@ -153,6 +153,8 @@ export interface Student {
   admissionDate: string;
   status: 'active' | 'withdrawn' | 'graduated' | 'suspended';
   photoUrl?: string;
+  guardianName?: string;
+  guardianPhone?: string;
   guardians: Guardian[];
   parentId?: string; // Primary linked parent/guardian user ID
   parentIds?: string[]; // Array of linked parent/guardian user account IDs
@@ -435,6 +437,11 @@ export type ProductCategory =
   | 'books' 
   | 'stationery' 
   | 'accessories' 
+  | 'food'
+  | 'sportswear'
+  | 'id_cards'
+  | 'branded'
+  | 'canteen'
   | 'other'
   | 'Uniform' 
   | 'Textbooks' 
@@ -456,10 +463,38 @@ export interface StoreItem {
   reorderLevel: number;
   unit?: string;
   supplier?: string;
-  status?: string;
+  imageUrl?: string;
+  status?: 'active' | 'inactive' | 'archived' | string;
   lastRestocked?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export type StockMovementType = 
+  | 'addition'
+  | 'restock'
+  | 'sale_deduction'
+  | 'return_restoration'
+  | 'adjustment'
+  | 'damaged'
+  | 'correction';
+
+export interface POSStockMovement {
+  id: string;
+  schoolId: string;
+  itemId: string;
+  itemName: string;
+  itemSku: string;
+  previousQuantity: number;
+  quantityChanged: number;
+  newQuantity: number;
+  movementType: StockMovementType;
+  reason: string;
+  user: string;
+  userId?: string;
+  timestamp: string;
+  relatedTransactionId?: string;
+  relatedReceiptNumber?: string;
 }
 
 export interface POSCartItem {
@@ -481,14 +516,18 @@ export interface POSReceipt {
     totalPrice: number;
   }>;
   subtotal: number;
+  discount?: number;
   totalAmount: number;
   paymentMethod: PaymentMethod;
   customerName?: string;
+  customerPhone?: string;
   studentId?: string;
   studentName?: string;
   cashierName: string;
   timestamp: string;
-  status: 'completed' | 'refunded';
+  status: 'completed' | 'refunded' | 'voided';
+  reference?: string;
+  transactionReference?: string;
 }
 
 export interface POSTransaction {
@@ -500,22 +539,70 @@ export interface POSTransaction {
   items: Array<{
     itemId: string;
     name: string;
+    sku?: string;
     category?: string;
     quantity: number;
     unitPrice: number;
+    costPrice?: number;
     subtotal: number;
   }>;
   subtotal: number;
   discount?: number;
+  discountType?: 'amount' | 'percentage';
   total: number;
   paymentMethod: PaymentMethod;
   amountPaid?: number;
   changeGiven?: number;
-  customerType?: 'student' | 'guardian' | 'staff' | 'visitor';
+  paymentReference?: string;
+  customerType?: 'student' | 'guardian' | 'staff' | 'visitor' | 'general';
   customerName?: string;
+  customerPhone?: string;
+  studentId?: string;
+  studentName?: string;
   studentAdmissionNumber?: string;
+  classroomId?: string;
+  classroomName?: string;
+  parentGuardianName?: string;
+  parentGuardianPhone?: string;
+  staffId?: string;
+  staffName?: string;
   cashierName: string;
+  cashierId?: string;
+  cashierRole?: string;
+  status: 'completed' | 'voided' | 'refunded' | 'partially_refunded';
+  voidReason?: string;
+  voidedBy?: string;
+  voidedAt?: string;
+  smsStatus?: 'none' | 'pending' | 'queued' | 'sent' | 'delivered' | 'failed';
+  smsRecipientPhone?: string;
+  smsReference?: string;
+  smsSentAt?: string;
   date?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface POSRefundItem {
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  unitPrice: number;
+  refundAmount: number;
+  restock: boolean;
+}
+
+export interface POSRefund {
+  id: string;
+  schoolId: string;
+  saleId: string;
+  saleReceiptNumber: string;
+  refundReceiptNumber: string;
+  refundAmount: number;
+  items: POSRefundItem[];
+  reason: string;
+  paymentMethod: PaymentMethod;
+  processedBy: string;
+  processedById?: string;
   createdAt: string;
 }
 
@@ -530,6 +617,91 @@ export type SMSBroadcastRecipient =
   | 'defaulters' 
   | 'custom';
 
+export type SMSStatus = 
+  | 'PENDING' 
+  | 'PROCESSING' 
+  | 'SUBMITTED' 
+  | 'DELIVERED' 
+  | 'FAILED' 
+  | 'RETRYING' 
+  | 'UNKNOWN' 
+  | 'submitted' 
+  | 'delivered' 
+  | 'accepted' 
+  | 'sent' 
+  | 'failed' 
+  | 'pending' 
+  | 'queued' 
+  | 'no_phone' 
+  | 'processing';
+
+export interface SMSDispatchRecord {
+  broadcastId: string;
+  notificationId: string;
+  dispatchId: string;
+  schoolId: string;
+  recipientId: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber?: string;
+  classroomName: string;
+  recipientName: string;
+  phoneNumber: string;
+  rawPhoneNumber?: string;
+  message: string;
+  amountOwing?: number;
+  status: SMSStatus;
+  segments: number;
+  gatewayResponse?: string;
+  gatewayMessageId?: string;
+  createdAt: string;
+  submittedAt?: string;
+  deliveredAt?: string;
+  failedAt?: string;
+  errorMessage?: string;
+  sentBy: string;
+  category: CommunicationCategory;
+}
+
+export interface DefaulterDispatchItem {
+  studentId: string;
+  studentName: string;
+  admissionNumber?: string;
+  classroomId?: string;
+  classroomName: string;
+  parentName: string;
+  phoneNumber: string;
+  amountOwing: number;
+  term?: string;
+  academicYear?: string;
+  customMessage?: string;
+}
+
+export interface DefaultersBroadcastRequest {
+  schoolId: string;
+  recipients: DefaulterDispatchItem[];
+  templateMessage: string;
+  senderId?: string;
+  sentBy: string;
+  onProgress?: (progress: {
+    total: number;
+    current: number;
+    submitted: number;
+    failed: number;
+    currentStudentName: string;
+    record: SMSDispatchRecord;
+  }) => void;
+}
+
+export interface DefaultersBroadcastResult {
+  broadcastId: string;
+  totalRecipients: number;
+  submittedCount: number;
+  failedCount: number;
+  totalCostGHS: number;
+  records: SMSDispatchRecord[];
+}
+
 export interface BroadcastMessage {
   id: string;
   schoolId: string;
@@ -539,10 +711,12 @@ export interface BroadcastMessage {
   recipientCount: number;
   message: string;
   senderId: string;
-  status: 'delivered' | 'pending' | 'failed';
+  status: 'submitted' | 'delivered' | 'pending' | 'failed' | 'partial';
   costGHS: number;
   sentBy: string;
   sentAt: string;
+  submittedCount?: number;
+  failedCount?: number;
 }
 
 export interface AuditLog {
@@ -581,6 +755,15 @@ export interface SchoolSettings {
 }
 
 export type CommunicationCategory = 
+  | 'DEFAULTER_BROADCAST'
+  | 'ATTENDANCE_ABSENCE'
+  | 'FEE_PAYMENT_RECEIPT'
+  | 'FEE_REMINDER'
+  | 'EMERGENCY'
+  | 'GENERAL_NOTIFICATION'
+  | 'BULK_SMS'
+  | 'SCHEDULED_SMS'
+  | 'POS_RECEIPT'
   | 'fee_receipt' 
   | 'fee_reminder' 
   | 'fee_deadline'

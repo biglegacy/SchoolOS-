@@ -22,6 +22,7 @@ import {
   SubscriptionTier,
   FeatureKey,
   UserProfile,
+  UserRole,
   SMSBroadcastRecipient,
   PlatformCommunicationSettings,
   CommunicationLog,
@@ -35,7 +36,10 @@ import {
   DynamicReferenceResponse,
   PaystackFeeInitializeParams,
   PaystackFeeInitializeResponse,
-  TransactionType
+  TransactionType,
+  SMSDispatchRecord,
+  DefaulterDispatchItem,
+  DefaultersBroadcastResult
 } from '../types';
 import { loadInitialDatabase, saveDatabase, DatabaseState, resetDatabaseToSeed } from '../lib/storageService';
 import { checkFeatureAccess, INITIAL_PLANS, INITIAL_PLATFORM_COMMUNICATION, INITIAL_PAYSTACK_CONFIG, INITIAL_SUBSCRIPTION_TRANSACTIONS } from '../lib/mockData';
@@ -48,9 +52,17 @@ import {
   triggerAttendanceAbsenceAlert,
   triggerExamResultAlert
 } from '../lib/communicationService';
+import { 
+  getSchoolFeeDefaulters, 
+  executeDefaultersBroadcast, 
+  resolvePersonalizedMessage, 
+  DefaulterStudentView,
+  DEFAULT_DEFAULTER_SMS_TEMPLATE 
+} from '../lib/defaulterSmsService';
 import {
   subscribeToFirestore,
   fsUpdateSchool,
+  fsDeleteSchool,
   fsCreateUser,
   fsUpdateUser,
   fsDeleteUser,
@@ -178,11 +190,26 @@ interface SchoolContextType {
   sendBroadcastMessage: (msg: Omit<BroadcastMessage, 'id' | 'schoolId' | 'costGHS' | 'status' | 'sentAt'>) => Promise<BroadcastMessage>;
   sendSMSBroadcast: (recipientGroup: any, message: string, recipientCount?: number) => Promise<BroadcastMessage>;
   sendDirectCommunication: (params: Omit<SendCommunicationParams, 'schoolId' | 'schoolName'>) => Promise<CommunicationLog>;
+  getFeeDefaultersList: (options?: { classroomId?: string; term?: string; academicYear?: string; searchQuery?: string }) => DefaulterStudentView[];
+  sendDefaultersBroadcast: (params: {
+    selectedDefaulters: DefaulterStudentView[];
+    templateMessage: string;
+    senderId?: string;
+    onProgress?: (progress: {
+      total: number;
+      current: number;
+      submitted: number;
+      failed: number;
+      currentStudentName: string;
+      record: SMSDispatchRecord;
+    }) => void;
+  }) => Promise<DefaultersBroadcastResult>;
 
   // Super Admin Platform Actions
   approveSchool: (schoolId: string) => Promise<void>;
   rejectSchool: (schoolId: string) => Promise<void>;
   suspendSchool: (schoolId: string) => Promise<void>;
+  deleteSchool: (schoolId: string) => Promise<void>;
   updateAnySchool: (schoolId: string, data: Partial<School>) => Promise<void>;
   updateSchoolSubscription: (schoolId: string, plan: SubscriptionPlan, expiryDate: string) => Promise<void>;
   createPlan: (plan: Omit<SubscriptionTier, 'id' | 'createdAt' | 'updatedAt'>) => Promise<SubscriptionTier>;
@@ -1171,7 +1198,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       id: newId,
       schoolId: activeSchoolId,
       costGHS: totalCost,
-      status: 'delivered',
+      status: 'submitted',
       sentAt: new Date().toISOString(),
     };
 
@@ -1246,6 +1273,125 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     await fsUpdateSchool(schoolId, { status: 'suspended' });
+  };
+
+  const deleteSchool = async (schoolId: string) => {
+    // 1. Authorization verification (Strict Super Admin Role Enforcement)
+    const role = currentUser?.role;
+    if (!currentUser || (role !== 'superAdmin' && (role as string) !== 'SUPER_ADMIN')) {
+      throw new Error('Access Denied: Only users with the SUPER_ADMIN role are authorized to permanently delete schools.');
+    }
+
+    if (!schoolId || typeof schoolId !== 'string' || schoolId.trim() === '') {
+      throw new Error('Validation Error: A valid schoolId is required for deletion.');
+    }
+
+    const targetSchool = dbState.schools.find(s => s.id === schoolId);
+    if (!targetSchool) {
+      throw new Error(`School with ID "${schoolId}" was not found or has already been removed.`);
+    }
+
+    const schoolName = targetSchool.name;
+    const schoolLogo = targetSchool.logo;
+
+    // 2. Authoritative server verification & backend audit endpoint
+    try {
+      const response = await fetch(`/api/schools/${encodeURIComponent(schoolId)}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser.id,
+          'x-user-role': String(currentUser.role),
+          'x-user-email': currentUser.email || 'admin@schoolos.online'
+        },
+        body: JSON.stringify({
+          schoolId,
+          schoolName,
+          userId: currentUser.id,
+          userEmail: currentUser.email,
+          role: currentUser.role
+        })
+      });
+
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(errorJson.error || errorJson.message || `Server rejected deletion (HTTP ${response.status})`);
+      }
+    } catch (apiErr: any) {
+      // If server rejected due to authorization or invalid params, do not proceed
+      if (apiErr.message?.includes('Access Denied') || apiErr.message?.includes('Unauthorized') || apiErr.message?.includes('403')) {
+        throw apiErr;
+      }
+      console.warn('[Delete School API Notice]:', apiErr.message);
+    }
+
+    // 3. Delete in Cloud Firestore (Enforced by firestore.rules: allow delete: if isSuperAdmin();)
+    await fsDeleteSchool(schoolId, schoolLogo);
+
+    // 4. Create immutable audit log record for deletion
+    const auditRecord: AuditLog = {
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      schoolId: schoolId,
+      schoolName: schoolName,
+      userId: currentUser.id,
+      userName: currentUser.name || 'Super Admin',
+      userEmail: currentUser.email || 'admin@schoolos.online',
+      userRole: currentUser.role as UserRole,
+      action: 'SCHOOL_DELETED',
+      details: `Permanently deleted institution "${schoolName}" (ID: ${schoolId}) and all associated records (students, staff, classrooms, fees, transactions).`,
+      timestamp: new Date().toISOString()
+    };
+
+    // 5. Atomic state update and persistence in localStorage
+    updateStateAndPersist(prev => {
+      const updatedSchools = prev.schools.filter(s => s.id !== schoolId);
+      const updatedUsers = prev.users.filter(u => u.schoolId !== schoolId);
+      const updatedStudents = prev.students.filter(s => s.schoolId !== schoolId);
+      const updatedTeachers = prev.teachers.filter(t => t.schoolId !== schoolId);
+      const updatedClassrooms = prev.classrooms.filter(c => c.schoolId !== schoolId);
+      const updatedSubjects = prev.subjects.filter(s => s.schoolId !== schoolId);
+      const updatedAttendance = prev.attendance.filter(a => a.schoolId !== schoolId);
+      const updatedExams = prev.examinations.filter(e => e.schoolId !== schoolId);
+      const updatedResults = prev.results.filter(r => r.schoolId !== schoolId);
+      const updatedFeeStructures = prev.feeStructures.filter(f => f.schoolId !== schoolId);
+      const updatedFeePayments = prev.feePayments.filter(f => f.schoolId !== schoolId);
+      const updatedStoreItems = prev.storeItems.filter(i => i.schoolId !== schoolId);
+      const updatedPosTransactions = prev.posTransactions.filter(p => p.schoolId !== schoolId);
+      const updatedMessages = prev.messages.filter(m => m.schoolId !== schoolId);
+      const updatedCommLogs = (prev.communicationLogs || []).filter(c => c.schoolId !== schoolId);
+      const updatedSubTx = (prev.subscriptionTransactions || []).filter(t => t.schoolId !== schoolId);
+      const updatedSettings = { ...prev.settings };
+      delete updatedSettings[schoolId];
+
+      return {
+        ...prev,
+        schools: updatedSchools,
+        users: updatedUsers,
+        students: updatedStudents,
+        teachers: updatedTeachers,
+        classrooms: updatedClassrooms,
+        subjects: updatedSubjects,
+        attendance: updatedAttendance,
+        examinations: updatedExams,
+        results: updatedResults,
+        feeStructures: updatedFeeStructures,
+        feePayments: updatedFeePayments,
+        storeItems: updatedStoreItems,
+        posTransactions: updatedPosTransactions,
+        messages: updatedMessages,
+        communicationLogs: updatedCommLogs,
+        subscriptionTransactions: updatedSubTx,
+        settings: updatedSettings,
+        auditLogs: [auditRecord, ...prev.auditLogs]
+      };
+    });
+
+    // 6. Record audit log into Firestore
+    try {
+      await fsAddAuditLog(auditRecord);
+    } catch (auditErr) {
+      console.warn('Note: Could not write audit log to Firestore:', auditErr);
+    }
   };
 
   const updateAnySchool = async (schoolId: string, data: Partial<School>) => {
@@ -1808,13 +1954,108 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   };
 
+  const getFeeDefaultersList = (options?: { classroomId?: string; term?: string; academicYear?: string; searchQuery?: string }): DefaulterStudentView[] => {
+    const parents = (dbState.users || []).filter(u => u.role === 'parent');
+    return getSchoolFeeDefaulters(school, students, feeStructures, feePayments, parents, options);
+  };
+
+  const sendDefaultersBroadcast = async (params: {
+    selectedDefaulters: DefaulterStudentView[];
+    templateMessage: string;
+    senderId?: string;
+    onProgress?: (progress: {
+      total: number;
+      current: number;
+      submitted: number;
+      failed: number;
+      currentStudentName: string;
+      record: SMSDispatchRecord;
+    }) => void;
+  }): Promise<DefaultersBroadcastResult> => {
+    if (!school) throw new Error('No active school selected');
+
+    const { result, newLogs, creditsUsed } = await executeDefaultersBroadcast(
+      school,
+      params.selectedDefaulters,
+      params.templateMessage,
+      currentUser,
+      {
+        senderId: params.senderId || settings.smsSenderId,
+        apiKey: dbState.platformCommunication?.sms?.apiKey,
+        onProgress: params.onProgress
+      }
+    );
+
+    // Update state with new communication logs and subtract consumed credits
+    updateStateAndPersist(prev => {
+      const activeSetting = prev.settings[activeSchoolId] || defaultSettings;
+      const updatedSettings = {
+        ...prev.settings,
+        [activeSchoolId]: {
+          ...activeSetting,
+          smsBalance: Math.max(0, activeSetting.smsBalance - creditsUsed)
+        }
+      };
+
+      const auditMsg = `Dispatched Fee Defaulters Broadcast: ${result.submittedCount} submitted, ${result.failedCount} failed (${creditsUsed} credits used).`;
+      const log = logAction('DEFAULTER_SMS_BROADCAST', auditMsg, activeSchoolId);
+
+      return {
+        ...prev,
+        communicationLogs: [...newLogs, ...(prev.communicationLogs || [])],
+        settings: updatedSettings,
+        auditLogs: [log, ...prev.auditLogs]
+      };
+    });
+
+    return result;
+  };
+
   const sendSMSBroadcast = async (recipientGroup: any, message: string, recipientCount?: number): Promise<BroadcastMessage> => {
+    if (recipientGroup === 'fee_defaulters' || recipientGroup === 'defaulters') {
+      const defaulters = getFeeDefaultersList();
+      if (defaulters.length === 0) {
+        throw new Error('No fee defaulters with outstanding balances found.');
+      }
+
+      const result = await sendDefaultersBroadcast({
+        selectedDefaulters: defaulters,
+        templateMessage: message || DEFAULT_DEFAULTER_SMS_TEMPLATE,
+        senderId: settings.smsSenderId || school?.shortCode || 'SCHOOLOS'
+      });
+
+      const broadcastMsg: BroadcastMessage = {
+        id: result.broadcastId,
+        schoolId: activeSchoolId,
+        type: 'sms',
+        recipientGroup: 'fee_defaulters',
+        recipientCount: result.totalRecipients,
+        message,
+        senderId: settings.smsSenderId || school?.shortCode || 'SCHOOLOS',
+        status: result.submittedCount > 0 ? (result.failedCount > 0 ? 'partial' : 'submitted') : 'failed',
+        costGHS: result.totalCostGHS,
+        sentBy: currentUser?.fullName || 'School Administrator',
+        sentAt: new Date().toISOString(),
+        submittedCount: result.submittedCount,
+        failedCount: result.failedCount
+      };
+
+      updateStateAndPersist(prev => ({
+        ...prev,
+        messages: [broadcastMsg, ...prev.messages]
+      }));
+
+      return broadcastMsg;
+    }
+
     // Collect targeted recipient contacts for actual gateway submission
     const phoneList: Array<{ recipient: string; recipientName?: string }> = [];
     if (recipientGroup === 'all_parents' || recipientGroup === 'parents' || recipientGroup === 'all' || recipientGroup === 'all_guardians') {
       students.forEach(s => {
-        if (s.guardianPhone && s.guardianPhone.trim()) {
-          phoneList.push({ recipient: s.guardianPhone, recipientName: s.guardianName || `${s.firstName}'s Guardian` });
+        const phone = s.guardianPhone || s.guardians?.[0]?.phone || s.emergencyContact?.phone;
+        const name = s.guardianName || s.guardians?.[0]?.name || `${s.firstName}'s Guardian`;
+        if (phone && phone.trim()) {
+          phoneList.push({ recipient: phone, recipientName: name });
         }
       });
     }
@@ -1825,13 +2066,11 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       });
     }
-    if (recipientGroup === 'fee_defaulters' || recipientGroup === 'defaulters') {
-      const summaries = getStudentFeeSummaries();
-      const defaulterIds = new Set(summaries.filter(s => s.amountOwing > 0).map(s => s.studentId));
-      const defaulters = students.filter(s => defaulterIds.has(s.id) && s.guardianPhone);
-      defaulters.forEach(s => {
-        if (s.guardianPhone) {
-          phoneList.push({ recipient: s.guardianPhone, recipientName: s.guardianName || `${s.firstName}'s Guardian` });
+    if (recipientGroup === 'class_parents' || recipientGroup === 'class_guardians') {
+      students.forEach(s => {
+        const phone = s.guardianPhone || s.guardians?.[0]?.phone;
+        if (phone && phone.trim()) {
+          phoneList.push({ recipient: phone, recipientName: s.guardianName || `${s.firstName}'s Guardian` });
         }
       });
     }
@@ -2183,10 +2422,13 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         sendBroadcastMessage,
         sendSMSBroadcast,
         sendDirectCommunication,
+        getFeeDefaultersList,
+        sendDefaultersBroadcast,
 
         approveSchool,
         rejectSchool,
         suspendSchool,
+        deleteSchool,
         updateAnySchool,
         updateSchoolSubscription,
         createPlan,

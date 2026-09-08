@@ -36,6 +36,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
     approveSchool, 
     rejectSchool, 
     suspendSchool, 
+    deleteSchool,
     updateAnySchool,
     createPlan, 
     updatePlan, 
@@ -74,6 +75,12 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
     const sc = allSchools.find(s => s.id === schoolId);
     await suspendSchool(schoolId);
     showNotification(`Updated operational access for "${sc?.name || 'School'}".`);
+  };
+
+  const handleDeleteSchool = async (schoolId: string) => {
+    const sc = allSchools.find(s => s.id === schoolId);
+    await deleteSchool(schoolId);
+    showNotification(`School "${sc?.name || 'School'}" and all related data have been permanently deleted.`);
   };
 
   const handleUpdateSchool = async (schoolId: string, data: Partial<School>) => {
@@ -196,6 +203,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
           onApproveSchool={handleApproveSchool}
           onRejectSchool={handleRejectSchool}
           onSuspendSchool={handleSuspendSchool}
+          onDeleteSchool={handleDeleteSchool}
           onUpdateSchool={handleUpdateSchool}
           onAssignPlan={handleAssignPlan}
           onImpersonateSchool={handleImpersonate}

@@ -98,7 +98,12 @@ function generateDynamicReference(
     const entropyReceipt = crypto.randomBytes(2).toString('hex').toUpperCase(); // 4 hex chars e.g. B1C3
     
     reference = `${typePrefix}-${dateStr}-${timeStr}-${entropyHex}`;
-    receiptNumber = `${receiptPrefix}-${dateStr}-${entropyReceipt}`;
+    if (type === 'pos_sale') {
+      const posSeq = String(ISSUED_RECEIPT_NUMBERS.size + 1 + attempts).padStart(6, '0');
+      receiptNumber = `POS-${year}-${posSeq}`;
+    } else {
+      receiptNumber = `${receiptPrefix}-${dateStr}-${entropyReceipt}`;
+    }
     attempts++;
   } while ((ISSUED_TRANSACTION_REFERENCES.has(reference) || ISSUED_RECEIPT_NUMBERS.has(receiptNumber)) && attempts < 15);
 
@@ -1027,8 +1032,22 @@ async function startServer() {
         relatedRecordId,
         idempotencyKey: clientProvidedKey,
         messageId: clientMessageId,
-        apiKey: clientProvidedKeySecret
+        apiKey: clientProvidedKeySecret,
+        userRole: clientUserRole
       } = req.body || {};
+
+      const callerRole = String(clientUserRole || req.headers['x-user-role'] || '').toLowerCase();
+      const isPosReceipt = category === 'pos_receipt';
+      const authorizedRoles = isPosReceipt 
+        ? ['schoolowner', 'owner', 'principal', 'admin', 'administrator', 'superadmin', 'super_admin', 'accountant', 'cashier', 'staff', 'storekeeper']
+        : ['schoolowner', 'owner', 'principal', 'admin', 'administrator', 'superadmin', 'super_admin', 'accountant'];
+      if (callerRole && !authorizedRoles.includes(callerRole)) {
+        return res.status(403).json({
+          success: false,
+          status: 'failed',
+          error: `Authorization Error: Role "${clientUserRole || req.headers['x-user-role']}" is not authorized to dispatch SMS broadcasts. Authorized roles: School Owner, Principal, Administrator, Accountant${isPosReceipt ? ', Cashier' : ''}.`
+        });
+      }
 
       if (!schoolId) {
         return res.status(200).json({ 
@@ -1257,8 +1276,19 @@ async function startServer() {
         recipients,
         message,
         category,
-        apiKey: clientProvidedKeySecret
+        apiKey: clientProvidedKeySecret,
+        userRole: clientUserRole
       } = req.body || {};
+
+      const callerRole = String(clientUserRole || req.headers['x-user-role'] || '').toLowerCase();
+      const authorizedRoles = ['schoolowner', 'owner', 'principal', 'admin', 'administrator', 'superadmin', 'super_admin', 'accountant'];
+      if (callerRole && !authorizedRoles.includes(callerRole)) {
+        return res.status(403).json({
+          success: false,
+          status: 'failed',
+          error: `Authorization Error: Role "${clientUserRole || req.headers['x-user-role']}" is not authorized to dispatch bulk SMS broadcasts. Authorized roles: School Owner, Principal, Administrator, Accountant.`
+        });
+      }
 
       if (!schoolId) {
         return res.status(200).json({ success: false, status: 'failed', error: 'Multi-Tenant Error: schoolId is required' });
@@ -1356,6 +1386,130 @@ async function startServer() {
       });
     }
   });
+
+  // ----------------------------------------------------
+  // POINT OF SALE (POS): AUTHORITATIVE CALCULATION & VERIFICATION
+  // ----------------------------------------------------
+  app.post('/api/pos/calculate', (req, res) => {
+    try {
+      const { items, discountType, discountValue, amountPaid } = req.body || {};
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, error: 'At least one item is required in cart' });
+      }
+
+      let subtotal = 0;
+      const validatedItems = [];
+
+      for (const raw of items) {
+        const qty = Math.max(1, Math.floor(Number(raw.quantity) || 1));
+        const price = Math.max(0, Number(raw.unitPrice) || 0);
+        const itemSubtotal = Number((qty * price).toFixed(2));
+        subtotal += itemSubtotal;
+
+        validatedItems.push({
+          itemId: String(raw.itemId || ''),
+          name: String(raw.name || 'Product'),
+          sku: String(raw.sku || ''),
+          category: String(raw.category || 'other'),
+          quantity: qty,
+          unitPrice: price,
+          costPrice: typeof raw.costPrice === 'number' ? raw.costPrice : undefined,
+          subtotal: itemSubtotal
+        });
+      }
+
+      subtotal = Number(subtotal.toFixed(2));
+
+      let discountAmount = 0;
+      const numDiscountVal = Math.max(0, Number(discountValue) || 0);
+      if (discountType === 'percentage') {
+        const pct = Math.min(100, numDiscountVal);
+        discountAmount = Number(((subtotal * pct) / 100).toFixed(2));
+      } else {
+        discountAmount = Number(Math.min(subtotal, numDiscountVal).toFixed(2));
+      }
+
+      const total = Number(Math.max(0, subtotal - discountAmount).toFixed(2));
+      const paid = Number(amountPaid) || total;
+      const changeGiven = Number(Math.max(0, paid - total).toFixed(2));
+
+      return res.status(200).json({
+        success: true,
+        subtotal,
+        discount: discountAmount,
+        total,
+        amountPaid: paid,
+        changeGiven,
+        items: validatedItems
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/pos/generate-reference', (req, res) => {
+    try {
+      const { schoolId } = req.body || {};
+      const refData = generateDynamicReference('pos_sale', schoolId);
+      return res.status(200).json({
+        success: true,
+        ...refData
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // SUPER ADMIN: AUTHORITATIVE SCHOOL DELETION ENDPOINTS
+  // ----------------------------------------------------
+  const handleSchoolDeletion = async (req: express.Request, res: express.Response) => {
+    try {
+      const { schoolId } = req.params;
+      const role = req.headers['x-user-role'] || req.body?.role;
+      const userId = req.headers['x-user-id'] || req.body?.userId;
+      const userEmail = req.headers['x-user-email'] || req.body?.userEmail || 'admin@schoolos.online';
+      const schoolName = req.body?.schoolName || 'School';
+
+      // 1. Strict Authorization Verification (Super Admin Only)
+      if (!role || (role !== 'superAdmin' && role !== 'SUPER_ADMIN')) {
+        console.warn(`[SECURITY AUDIT] Unauthorized school deletion attempt blocked for schoolId "${schoolId}" by role "${role}" (userId: "${userId}")`);
+        return res.status(403).json({
+          success: false,
+          error: 'Access Denied: Only users with the SUPER_ADMIN role are authorized to permanently delete schools and tenant records.'
+        });
+      }
+
+      // 2. Strict Parameter Validation
+      if (!schoolId || typeof schoolId !== 'string' || schoolId.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation Error: A valid non-empty schoolId is required for deletion.'
+        });
+      }
+
+      console.log(`[AUDIT] [SCHOOL_DELETED] Super Admin "${userId}" (${userEmail}) authorized permanent deletion of school "${schoolId}" (${schoolName}) at ${new Date().toISOString()}`);
+
+      return res.status(200).json({
+        success: true,
+        action: 'SCHOOL_DELETED',
+        schoolId: schoolId.trim(),
+        schoolName,
+        deletedBy: userId,
+        timestamp: new Date().toISOString(),
+        message: `School "${schoolName}" (${schoolId}) successfully verified and authorized for deletion.`
+      });
+    } catch (err: any) {
+      console.error('[SCHOOL DELETION ERROR]:', err);
+      return res.status(500).json({
+        success: false,
+        error: `Server Error during school deletion verification: ${err.message}`
+      });
+    }
+  };
+
+  app.delete('/api/schools/:schoolId', handleSchoolDeletion);
+  app.post('/api/schools/:schoolId/delete', handleSchoolDeletion);
 
   // Vite integration
   if (process.env.NODE_ENV !== 'production') {
