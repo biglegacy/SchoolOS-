@@ -37,15 +37,15 @@ export const ReportsCenterView: React.FC = () => {
       <div className="bg-slate-900 text-white rounded-2xl p-6 sm:p-7 border border-slate-800 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-950/80 border border-teal-700/60 text-teal-300 text-xs font-semibold">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold">
               <Award className="w-3.5 h-3.5" />
-              <span>GES Standards Continuous Assessment</span>
+              <span>Continuous Assessment Standards</span>
             </div>
             <h2 className="text-2xl font-black tracking-tight text-white">
               Terminal Report Cards Center
             </h2>
             <p className="text-xs text-slate-300">
-              Generate, preview, and print official Ghana Education Service (SBA) report cards for {school?.name}.
+              Generate, preview, and print official terminal report cards for {school?.name}.
             </p>
           </div>
 

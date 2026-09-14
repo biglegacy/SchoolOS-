@@ -1951,6 +1951,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       customerType: saleData.customerType || 'student',
       cashierName: saleData.cashierName || currentUser?.fullName || 'Cashier',
       date: new Date().toISOString().split('T')[0],
+      status: 'completed',
     });
   };
 

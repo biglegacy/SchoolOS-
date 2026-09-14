@@ -55,9 +55,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     if (role === 'teacher') {
       return [
         { id: 'teacher_portal', label: 'Portal', icon: GraduationCap },
-        { id: 'attendance', label: 'Roll Call', icon: CalendarCheck2 },
         { id: 'results', label: 'Marks', icon: FileSpreadsheet },
         { id: 'reports', label: 'Reports', icon: FileText },
+        { id: 'students', label: 'Pupils', icon: Users },
         { id: 'menu', label: 'Menu', icon: Menu, onClick: onOpenMenu },
       ];
     }

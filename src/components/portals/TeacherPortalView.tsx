@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSchool } from '../../contexts/SchoolContext';
-import { AttendanceStatus, Student, Teacher, TeacherSubjectAssignment, TimetableSlot } from '../../types';
+import { Student, Teacher, TeacherSubjectAssignment, TimetableSlot } from '../../types';
 import { 
   GraduationCap, 
-  CalendarCheck2, 
   FileSpreadsheet, 
   FileText, 
   Users, 
@@ -46,7 +45,7 @@ import { calculateTotalScore, calculateGhanaGrade } from '../../utils/calculatio
 
 interface TeacherPortalViewProps {
   onNavigate?: (tab: NavTabId) => void;
-  initialSubTab?: 'overview' | 'assignments' | 'attendance' | 'results' | 'reports' | 'students' | 'timetable' | 'notices';
+  initialSubTab?: 'overview' | 'assignments' | 'results' | 'reports' | 'students' | 'timetable' | 'notices';
 }
 
 export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({ 
@@ -60,14 +59,14 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
     teachers,
     results = [],
     examResults = [], 
-    attendance = [], 
-    markAttendanceBulk, 
     recordExamResult,
     updateTeacher,
     school
   } = useSchool();
 
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'assignments' | 'attendance' | 'results' | 'reports' | 'students' | 'timetable' | 'notices'>(initialSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'assignments' | 'results' | 'reports' | 'students' | 'timetable' | 'notices'>(
+    initialSubTab === ('attendance' as any) ? 'overview' : initialSubTab
+  );
   const [selectedReportStudent, setSelectedReportStudent] = useState<Student | null>(null);
 
   // Sync active sub-tab if initialSubTab prop changes (e.g. from Sidebar clicks)
@@ -147,104 +146,6 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
     });
     return map;
   }, [assignments]);
-
-  // ----------------------------------------------------
-  // ATTENDANCE STATE & WORKFLOW (Subject & Class Specific)
-  // ----------------------------------------------------
-  const [attSubject, setAttSubject] = useState<string>('');
-  const [attClassroomId, setAttClassroomId] = useState<string>('');
-  const [attDate, setAttDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [attendanceMap, setAttendanceMap] = useState<{ [studentId: string]: { status: AttendanceStatus; remarks?: string } }>({});
-  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
-  const [attendanceSuccess, setAttendanceSuccess] = useState<string | null>(null);
-
-  // Sync default selection for Attendance
-  useEffect(() => {
-    if (distinctSubjects.length > 0 && (!attSubject || !distinctSubjects.includes(attSubject))) {
-      setAttSubject(distinctSubjects[0]);
-    }
-  }, [distinctSubjects, attSubject]);
-
-  const attAvailableClassrooms = useMemo(() => {
-    if (!attSubject) return distinctClassrooms;
-    const matchingAssignments = assignments.filter(a => a.subjectName.toLowerCase() === attSubject.toLowerCase());
-    const classIds = matchingAssignments.map(a => a.classroomId);
-    return distinctClassrooms.filter(c => classIds.includes(c.id));
-  }, [attSubject, assignments, distinctClassrooms]);
-
-  useEffect(() => {
-    if (attAvailableClassrooms.length > 0 && (!attClassroomId || !attAvailableClassrooms.some(c => c.id === attClassroomId))) {
-      setAttClassroomId(attAvailableClassrooms[0].id);
-    }
-  }, [attAvailableClassrooms, attClassroomId]);
-
-  const attStudents = useMemo(() => {
-    if (!attClassroomId) return [];
-    return students.filter(s => s.currentClassroomId === attClassroomId);
-  }, [students, attClassroomId]);
-
-  // Load existing attendance for this class & subject & date
-  useEffect(() => {
-    const map: { [studentId: string]: { status: AttendanceStatus; remarks?: string } } = {};
-    attStudents.forEach(st => {
-      const existing = attendance.find(
-        a => a.studentId === st.id && 
-             a.date === attDate && 
-             (a.subjectName === attSubject || !a.subjectName)
-      );
-      if (existing) {
-        map[st.id] = { status: existing.status, remarks: existing.remarks };
-      } else {
-        map[st.id] = { status: 'present' };
-      }
-    });
-    setAttendanceMap(map);
-  }, [attDate, attClassroomId, attSubject, attStudents, attendance]);
-
-  const handleAttStatusChange = (studentId: string, status: AttendanceStatus) => {
-    setAttendanceMap(prev => ({
-      ...prev,
-      [studentId]: { ...prev[studentId], status }
-    }));
-  };
-
-  const handleAttRemarksChange = (studentId: string, remarks: string) => {
-    setAttendanceMap(prev => ({
-      ...prev,
-      [studentId]: { ...prev[studentId], remarks }
-    }));
-  };
-
-  const handleMarkAllAttendance = (status: AttendanceStatus) => {
-    const updated: typeof attendanceMap = {};
-    attStudents.forEach(st => {
-      updated[st.id] = { ...attendanceMap[st.id], status };
-    });
-    setAttendanceMap(updated);
-  };
-
-  const handleSaveAttendance = async () => {
-    if (!attClassroomId || attStudents.length === 0) return;
-    setIsSavingAttendance(true);
-
-    const records = attStudents.map(st => ({
-      studentId: st.id,
-      studentName: `${st.firstName} ${st.lastName}`,
-      classroomId: attClassroomId,
-      subjectName: attSubject,
-      date: attDate,
-      academicYear: school?.currentAcademicYear || `${new Date().getFullYear()}/${new Date().getFullYear() + 1}`,
-      term: school?.currentTerm || 'Term 3',
-      status: attendanceMap[st.id]?.status || 'present',
-      remarks: attendanceMap[st.id]?.remarks,
-      recordedBy: activeTeacher ? `${activeTeacher.firstName} ${activeTeacher.lastName}` : currentUser?.fullName,
-    }));
-
-    await markAttendanceBulk(records);
-    setIsSavingAttendance(false);
-    setAttendanceSuccess(`Saved roll call for ${attSubject} (${attStudents.length} pupils)!`);
-    setTimeout(() => setAttendanceSuccess(null), 3500);
-  };
 
   // ----------------------------------------------------
   // SBA & MARKS ENTRY STATE & WORKFLOW
@@ -451,13 +352,6 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
     await updateTeacher(activeTeacher.id, { timetable: updated });
   };
 
-  // Quick navigation shortcut from assignment cards
-  const navigateToAttendance = (subj: string, classId: string) => {
-    setAttSubject(subj);
-    setAttClassroomId(classId);
-    setActiveSubTab('attendance');
-  };
-
   const navigateToMarks = (subj: string, classId: string) => {
     setMarksSubject(subj);
     setMarksClassroomId(classId);
@@ -470,19 +364,8 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
   };
 
   // ----------------------------------------------------
-  // PENDING ATTENDANCE & ASSESSMENTS SUMMARY
+  // PENDING ASSESSMENTS SUMMARY
   // ----------------------------------------------------
-  const pendingAttendanceCount = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    let pending = 0;
-    assignments.forEach(asgn => {
-      const hasRecord = attendance.some(
-        a => a.classroomId === asgn.classroomId && a.subjectName === asgn.subjectName && a.date === today
-      );
-      if (!hasRecord) pending++;
-    });
-    return pending;
-  }, [assignments, attendance]);
 
   const pendingAssessmentsCount = useMemo(() => {
     let pending = 0;
@@ -574,19 +457,7 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
               }`}
             >
               <BookOpen className={`w-4 h-4 ${activeSubTab === 'assignments' ? 'text-white' : 'text-slate-500'}`} />
-              <span>My Assignments</span>
-            </button>
-            <button
-              id="hero-nav-attendance-btn"
-              onClick={() => setActiveSubTab('attendance')}
-              className={`px-3.5 py-2.5 font-bold text-xs rounded-xl border transition-all flex items-center gap-2 cursor-pointer shadow-2xs ${
-                activeSubTab === 'attendance'
-                  ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
-                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-              }`}
-            >
-              <CalendarCheck2 className={`w-4 h-4 ${activeSubTab === 'attendance' ? 'text-white' : 'text-slate-500'}`} />
-              <span>Take Roll Call</span>
+              <span>My Teaching Load</span>
             </button>
             <button
               id="hero-nav-results-btn"
@@ -600,6 +471,18 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
               <FileSpreadsheet className={`w-4 h-4 ${activeSubTab === 'results' ? 'text-white' : 'text-slate-500'}`} />
               <span>Enter Marks ({sbaMax}/{examMax})</span>
             </button>
+            <button
+              id="hero-nav-reports-btn"
+              onClick={() => setActiveSubTab('reports')}
+              className={`px-3.5 py-2.5 font-bold text-xs rounded-xl border transition-all flex items-center gap-2 cursor-pointer shadow-2xs ${
+                activeSubTab === 'reports'
+                  ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              <FileText className={`w-4 h-4 ${activeSubTab === 'reports' ? 'text-white' : 'text-slate-500'}`} />
+              <span>Reports</span>
+            </button>
           </div>
         </div>
 
@@ -608,10 +491,9 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
           {[
             { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
             { id: 'assignments', label: 'My Teaching Load', icon: BookOpen, count: assignments.length },
-            { id: 'attendance', label: 'Daily Roll Call', icon: CalendarCheck2, badge: pendingAttendanceCount > 0 ? `${pendingAttendanceCount} Pending` : undefined },
             { id: 'results', label: `SBA & Marks (${sbaMax}/${examMax})`, icon: FileSpreadsheet, badge: pendingAssessmentsCount > 0 ? `${pendingAssessmentsCount} Pending` : undefined },
             { id: 'students', label: 'My Pupils Directory', icon: Users, count: myStudents.length },
-            { id: 'reports', label: 'GES Terminal Reports', icon: FileText },
+            { id: 'reports', label: 'Terminal Reports', icon: FileText },
             { id: 'timetable', label: 'Weekly Timetable', icon: Clock },
             { id: 'notices', label: 'Staff Notices', icon: MessageSquare },
           ].map(tab => {
@@ -655,7 +537,7 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
         <div className="space-y-6">
           
           {/* STATS METRIC CARDS (CLEAN WHITE CARDS) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
             {/* Card 1: Subjects */}
             <div 
@@ -712,37 +594,22 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
               </div>
             </div>
 
-            {/* Card 4: Pending Attendance */}
+            {/* Card 4: Assessment Portfolios */}
             <div 
-              onClick={() => setActiveSubTab('attendance')}
+              onClick={() => setActiveSubTab('results')}
               className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs hover:border-sky-400 hover:shadow-sm transition-all cursor-pointer group flex flex-col justify-between"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] uppercase font-bold text-amber-700 tracking-wider">Roll Call Due</span>
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center group-hover:scale-105 transition-transform border border-amber-200">
-                  <CalendarCheck2 className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <div className="text-3xl font-black text-amber-700">{pendingAttendanceCount}</div>
-                <p className="text-[11px] text-slate-500 mt-1">Today&apos;s pending classes</p>
-              </div>
-            </div>
-
-            {/* Card 5: Pending Marks */}
-            <div 
-              onClick={() => setActiveSubTab('results')}
-              className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs hover:border-sky-400 hover:shadow-sm transition-all cursor-pointer group col-span-2 sm:col-span-1 flex flex-col justify-between"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] uppercase font-bold text-emerald-700 tracking-wider">Marks Ready</span>
+                <span className="text-[11px] uppercase font-bold text-emerald-700 tracking-wider">Assessment Portfolios</span>
                 <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform border border-emerald-200">
                   <FileSpreadsheet className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-3">
                 <div className="text-3xl font-black text-emerald-700">{assignments.length}</div>
-                <p className="text-[11px] text-slate-500 mt-1">SBA ({sbaMax}) / Exam ({examMax})</p>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  {pendingAssessmentsCount > 0 ? `${pendingAssessmentsCount} classes pending marks` : 'All marks updated'}
+                </p>
               </div>
             </div>
 
@@ -760,7 +627,7 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
                     My Active Teaching Load & Direct Actions
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Select a subject and classroom to immediately take daily roll call or input {sbaMax}/{examMax} assessment scores
+                    Select a subject and classroom to enter {sbaMax}/{examMax} assessment marks or view enrolled pupils
                   </p>
                 </div>
               </div>
@@ -789,10 +656,6 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
                 {assignments.map((asgn, idx) => {
                   const targetClass = classrooms.find(c => c.id === asgn.classroomId);
                   const classPupils = students.filter(s => s.currentClassroomId === asgn.classroomId);
-                  const today = new Date().toISOString().split('T')[0];
-                  const hasAttToday = attendance.some(
-                    a => a.classroomId === asgn.classroomId && a.subjectName === asgn.subjectName && a.date === today
-                  );
 
                   return (
                     <div 
@@ -813,34 +676,23 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
                         <p className="text-xs text-slate-500 mt-0.5">
                           Level: {targetClass?.level || 'Basic'} • Room: {targetClass?.roomNumber || 'Assigned Room'}
                         </p>
-
-                        <div className="mt-3 flex items-center gap-2 text-xs">
-                          <span className={`inline-flex items-center gap-1.5 font-medium px-2 py-0.5 rounded-md ${
-                            hasAttToday 
-                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
-                              : 'bg-amber-50 text-amber-800 border border-amber-200'
-                          }`}>
-                            {hasAttToday ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Clock className="w-3.5 h-3.5 text-amber-600" />}
-                            {hasAttToday ? 'Roll call marked today' : 'Roll call pending today'}
-                          </span>
-                        </div>
                       </div>
 
                       {/* Interactive Navigation Action Buttons */}
                       <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-200">
-                        <button
-                          onClick={() => navigateToAttendance(asgn.subjectName, asgn.classroomId)}
-                          className="py-2 px-2.5 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold rounded-lg border border-slate-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                        >
-                          <CalendarCheck2 className="w-3.5 h-3.5 text-sky-700" />
-                          <span>Roll Call</span>
-                        </button>
                         <button
                           onClick={() => navigateToMarks(asgn.subjectName, asgn.classroomId)}
                           className="py-2 px-2.5 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
                         >
                           <FileSpreadsheet className="w-3.5 h-3.5" />
                           <span>Enter Marks</span>
+                        </button>
+                        <button
+                          onClick={() => navigateToStudents(asgn.classroomId)}
+                          className="py-2 px-2.5 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold rounded-lg border border-slate-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                          <Users className="w-3.5 h-3.5 text-slate-600" />
+                          <span>View Pupils</span>
                         </button>
                       </div>
                     </div>
@@ -917,9 +769,9 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
                 </div>
 
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-                  <span className="font-bold text-slate-900 block text-sm">Lesson Attendance Roll Calls</span>
+                  <span className="font-bold text-slate-900 block text-sm">Academic Reporting & Records</span>
                   <p className="text-slate-600 text-xs leading-relaxed">
-                    Roll calls are recorded per individual subject and classroom stream. Daily marks update the institutional attendance registers in real-time.
+                    Terminal assessment marks feed directly into GES-standard Terminal Reports. Subject teachers enter Continuous Assessment (SBA) and Terminal Examination scores.
                   </p>
                 </div>
               </div>
@@ -983,15 +835,6 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => {
-                            setAttSubject(subjName);
-                            setActiveSubTab('attendance');
-                          }}
-                          className="px-3.5 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-bold rounded-lg border border-sky-200 transition-colors cursor-pointer"
-                        >
-                          Roll Call
-                        </button>
-                        <button
-                          onClick={() => {
                             setMarksSubject(subjName);
                             setActiveSubTab('results');
                           }}
@@ -1023,16 +866,10 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
 
                             <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
                               <button
-                                onClick={() => navigateToAttendance(asgn.subjectName, asgn.classroomId)}
-                                className="flex-1 py-1.5 px-2 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold rounded border border-slate-200 transition-colors text-center cursor-pointer"
-                              >
-                                Roll Call
-                              </button>
-                              <button
                                 onClick={() => navigateToMarks(asgn.subjectName, asgn.classroomId)}
                                 className="flex-1 py-1.5 px-2 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded transition-colors text-center shadow-2xs cursor-pointer"
                               >
-                                Marks
+                                Marks ({sbaMax}/{examMax})
                               </button>
                               <button
                                 onClick={() => navigateToStudents(asgn.classroomId)}
@@ -1055,201 +892,7 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* 3. ATTENDANCE ROLL CALL SUB-TAB (WHITE CARD THEME) */}
-      {/* ========================================================================= */}
-      {activeSubTab === 'attendance' && (
-        <div className="space-y-6">
-          <div className="bg-white text-slate-900 rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-            <div>
-              <h2 className="text-lg font-black text-slate-900">Subject Attendance Roll Call</h2>
-              <p className="text-xs text-slate-500">Record lesson presence, tardiness, and absences for your assigned classes</p>
-            </div>
-
-            {attendanceSuccess && (
-              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{attendanceSuccess}</span>
-              </div>
-            )}
-
-            {/* Selectors Bar: Subject -> Classroom -> Date */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">1. Select Subject *</label>
-                <select
-                  value={attSubject}
-                  onChange={e => setAttSubject(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white font-medium"
-                >
-                  {distinctSubjects.length === 0 ? (
-                    <option value="">No subjects assigned</option>
-                  ) : (
-                    distinctSubjects.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">2. Select Classroom *</label>
-                <select
-                  value={attClassroomId}
-                  onChange={e => setAttClassroomId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white font-medium"
-                >
-                  {attAvailableClassrooms.length === 0 ? (
-                    <option value="">No classrooms for this subject</option>
-                  ) : (
-                    attAvailableClassrooms.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.level})</option>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">3. Roll Call Date *</label>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="date"
-                    value={attDate}
-                    onChange={e => setAttDate(e.target.value)}
-                    className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white font-medium"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setAttDate(new Date().toISOString().split('T')[0])}
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors cursor-pointer"
-                  >
-                    Today
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Action Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => handleMarkAllAttendance('present')}
-                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                >
-                  Mark All Present
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleMarkAllAttendance('absent')}
-                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                >
-                  Mark All Absent
-                </button>
-              </div>
-
-              {attStudents.length > 0 && (
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="font-bold text-slate-900">{attStudents.length} Students</span> in active class roster
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Students Roll Call Table (White Card Container) */}
-          {attStudents.length === 0 ? (
-            <div className="bg-white text-slate-900 rounded-2xl border border-dashed border-slate-300 p-12 text-center text-xs text-slate-500">
-              No students enrolled in the selected classroom. Select another class or add students.
-            </div>
-          ) : (
-            <div className="bg-white text-slate-900 rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
-                    <tr>
-                      <th className="px-4 py-3">#</th>
-                      <th className="px-4 py-3">Pupil Name</th>
-                      <th className="px-4 py-3">Adm No.</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Remarks</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {attStudents.map((st, idx) => {
-                      const currentStatus = attendanceMap[st.id]?.status || 'present';
-                      const currentRemarks = attendanceMap[st.id]?.remarks || '';
-
-                      return (
-                        <tr key={st.id} className="hover:bg-slate-50/70 transition-colors">
-                          <td className="px-4 py-3 font-mono text-slate-400">{idx + 1}</td>
-                          <td className="px-4 py-3 font-bold text-slate-900">
-                            {st.firstName} {st.lastName}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-slate-500">{st.admissionNumber}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1.5">
-                              {(['present', 'late', 'absent', 'excused'] as AttendanceStatus[]).map(status => {
-                                const isSel = currentStatus === status;
-                                return (
-                                  <button
-                                    key={status}
-                                    type="button"
-                                    onClick={() => handleAttStatusChange(st.id, status)}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold capitalize transition-all cursor-pointer ${
-                                      isSel
-                                        ? status === 'present'
-                                          ? 'bg-emerald-600 text-white shadow-2xs'
-                                          : status === 'late'
-                                          ? 'bg-amber-500 text-white shadow-2xs'
-                                          : status === 'absent'
-                                          ? 'bg-rose-600 text-white shadow-2xs'
-                                          : 'bg-sky-600 text-white shadow-2xs'
-                                        : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
-                                    }`}
-                                  >
-                                    {status}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <input
-                              type="text"
-                              placeholder="e.g. Arrived late, Excused sick"
-                              value={currentRemarks}
-                              onChange={e => handleAttRemarksChange(st.id, e.target.value)}
-                              className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-sky-500 bg-white text-slate-900"
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between flex-wrap gap-3">
-                <span className="text-xs text-slate-600">
-                  Saving records for <b className="text-slate-900">{attSubject}</b> on <b className="text-slate-900">{formatDate(attDate)}</b>
-                </span>
-
-                <button
-                  type="button"
-                  onClick={handleSaveAttendance}
-                  disabled={isSavingAttendance}
-                  className="px-6 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>{isSavingAttendance ? 'Saving Records...' : 'Save Attendance Roll'}</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 4. SBA & MARKS ENTRY SUB-TAB (WHITE CARD THEME) */}
+      {/* 3. SBA & MARKS ENTRY SUB-TAB (WHITE CARD THEME) */}
       {/* ========================================================================= */}
       {activeSubTab === 'results' && (
         <div className="space-y-6">

@@ -129,7 +129,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           groupTitle: 'TEACHING WORKSPACE',
           items: [
             { id: 'teacher_portal', label: 'My Teacher Portal', icon: GraduationCap },
-            { id: 'attendance', label: 'Daily Roll Call', icon: CalendarCheck2, featureKey: 'attendance' },
             { id: 'results', label: 'Continuous Assessment (30/70)', icon: FileSpreadsheet, featureKey: 'results' },
             { id: 'reports', label: 'Class Terminal Reports', icon: FileText, featureKey: 'reports' },
             { id: 'students', label: 'Class Students & Guardians', icon: Users, featureKey: 'students' },

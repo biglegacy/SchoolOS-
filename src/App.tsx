@@ -126,8 +126,6 @@ const MainAppLayout: React.FC = () => {
     // Strict RBAC View Resolution for Teacher Role
     if (role === 'teacher') {
       switch (activeTab) {
-        case 'attendance':
-          return <TeacherPortalView onNavigate={setActiveTab} initialSubTab="attendance" />;
         case 'results':
           return <TeacherPortalView onNavigate={setActiveTab} initialSubTab="results" />;
         case 'reports':
@@ -137,6 +135,7 @@ const MainAppLayout: React.FC = () => {
         case 'communications':
           return <TeacherPortalView onNavigate={setActiveTab} initialSubTab="notices" />;
         case 'teacher_portal':
+        case 'attendance':
         default:
           return <TeacherPortalView onNavigate={setActiveTab} initialSubTab="overview" />;
       }
