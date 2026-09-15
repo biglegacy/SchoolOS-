@@ -11,7 +11,6 @@ import { SuperAdminSubscriptions } from './SuperAdminSubscriptions';
 import { SuperAdminBilling } from './SuperAdminBilling';
 import { SuperAdminFeatures } from './SuperAdminFeatures';
 import { SuperAdminBroadcastSMS } from './SuperAdminBroadcastSMS';
-import { SuperAdminBroadcastWhatsApp } from './SuperAdminBroadcastWhatsApp';
 import { SuperAdminNotifications } from './SuperAdminNotifications';
 import { SuperAdminAudit } from './SuperAdminAudit';
 import { SuperAdminPlatformReports } from './SuperAdminPlatformReports';
@@ -176,7 +175,6 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
             else if (nav === 'features') setActiveNav('services_features');
             else if (nav === 'portals') setActiveNav('services_portals');
             else if (nav === 'sms') setActiveNav('comm_sms');
-            else if (nav === 'whatsapp') setActiveNav('comm_whatsapp');
             else if (nav === 'audit') setActiveNav('platform_audit');
             else setActiveNav('schools_all');
           }}
@@ -313,17 +311,6 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onImpersonateSch
             );
             const sentCount = results.filter(r => r.status === 'fulfilled').length;
             showNotification(`SMS broadcast submitted for ${sentCount} institutions via Arkesel gateway.`);
-          }}
-        />
-      )}
-
-      {/* COMMUNICATION: BROADCAST WHATSAPP */}
-      {activeNav === 'comm_whatsapp' && (
-        <SuperAdminBroadcastWhatsApp
-          schools={allSchools}
-          communicationSettings={platformCommunication}
-          onSendBroadcast={async ({ recipientGroup, message, template }) => {
-            showNotification(`WhatsApp broadcast dispatched to ${recipientGroup.replace('_', ' ')}.`);
           }}
         />
       )}

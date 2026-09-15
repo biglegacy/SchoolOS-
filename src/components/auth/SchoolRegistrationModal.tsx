@@ -73,7 +73,7 @@ export const SchoolRegistrationModal: React.FC<SchoolRegistrationModalProps> = (
           email: formData.schoolEmail || formData.ownerEmail,
           phone: formData.schoolPhone || formData.ownerPhone,
           logo: formData.logoUrl,
-          registrationNumber: formData.registrationNumber || `GES/REG/${Math.floor(10000 + Math.random() * 90000)}`,
+          registrationNumber: formData.registrationNumber || `REG/${Math.floor(10000 + Math.random() * 90000)}`,
           subscriptionPlan: formData.subscriptionPlan,
           planId: `plan_${formData.subscriptionPlan}`,
         },
@@ -170,7 +170,7 @@ export const SchoolRegistrationModal: React.FC<SchoolRegistrationModalProps> = (
             <div className="h-0.5 w-12 bg-slate-200" />
             <div className={`flex items-center gap-2 text-xs font-bold ${step >= 3 ? 'text-teal-800' : 'text-slate-400'}`}>
               <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-mono font-bold ${step >= 3 ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-500'}`}>3</span>
-              <span>GES EMIS & Plan</span>
+              <span>Accreditation & Plan</span>
             </div>
           </div>
 
@@ -307,7 +307,7 @@ export const SchoolRegistrationModal: React.FC<SchoolRegistrationModalProps> = (
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone / WhatsApp *</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone / SMS Number *</label>
                   <input
                     type="tel"
                     required
@@ -354,13 +354,13 @@ export const SchoolRegistrationModal: React.FC<SchoolRegistrationModalProps> = (
             <div className="space-y-3.5 animate-in fade-in duration-150">
               <div className="flex items-center gap-2 pb-1 border-b border-slate-100">
                 <CreditCard className="w-4 h-4 text-teal-700" />
-                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">GES Accreditation & Subscription Plan</h4>
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Accreditation & Subscription Plan</h4>
               </div>
 
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    GES EMIS Code / Certificate Number (Optional)
+                    EMIS Code / Certificate Number (Optional)
                   </label>
                   <input
                     type="text"
@@ -426,7 +426,7 @@ export const SchoolRegistrationModal: React.FC<SchoolRegistrationModalProps> = (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 space-y-1">
                   <div className="font-bold text-slate-800 flex items-center gap-1.5">
                     <GhanaFlagBadge size="sm" />
-                    <span>Includes Complete GES Curriculum Setup:</span>
+                    <span>Includes Standard Curriculum Setup:</span>
                   </div>
                   <p className="text-[11px] text-slate-500">
                     Standard 30% Continuous Assessment + 70% Terminal Examination auto-grading, student billing in GH₵, SMS broadcast gateway, and point-of-sale inventory.

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../contexts/SchoolContext';
-import { calculateTotalScore, getGESGrade, getGradeRemarks, calculatePositions } from '../../utils/calculations';
+import { calculateTotalScore, getStandardGrade, getGradeRemarks, calculatePositions } from '../../utils/calculations';
 import { 
   FileSpreadsheet, 
   Save, 
@@ -88,7 +88,7 @@ export const ResultsAndExamsView: React.FC = () => {
     for (const st of classStudents) {
       const entry = scores[st.id] || { classScore: 0, examScore: 0 };
       const total = calculateTotalScore(entry.classScore, entry.examScore, sbaMax, examMax);
-      const grade = getGESGrade(total, totalMax);
+      const grade = getStandardGrade(total, totalMax);
       const pos = positions[st.id] || 1;
 
       await recordExamResult({
@@ -120,7 +120,7 @@ export const ResultsAndExamsView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-gray-900 tracking-tight">Examinations & Continuous Assessment</h2>
-          <p className="text-xs text-gray-500">Official GES 30% Class Score + 70% Exam Score auto-grading and rankings</p>
+          <p className="text-xs text-gray-500">Official 30% Class Score + 70% Exam Score auto-grading and rankings</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -197,7 +197,7 @@ export const ResultsAndExamsView: React.FC = () => {
         </div>
       </div>
 
-      {/* GES Formula Info Pill */}
+      {/* Grading Formula Info Pill */}
       <div className="bg-teal-50 border border-teal-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-teal-900 shadow-2xs">
         <div className="flex items-center gap-2 flex-wrap">
           <GhanaFlagBadge size="sm" />
@@ -228,7 +228,7 @@ export const ResultsAndExamsView: React.FC = () => {
             classStudents.map((student) => {
               const entry = scores[student.id] || { classScore: 0, examScore: 0 };
               const total = calculateTotalScore(entry.classScore, entry.examScore, sbaMax, examMax);
-              const grade = getGESGrade(total, totalMax);
+              const grade = getStandardGrade(total, totalMax);
               const remarks = getGradeRemarks(grade);
 
               return (
@@ -324,7 +324,7 @@ export const ResultsAndExamsView: React.FC = () => {
                 classStudents.map((student, idx) => {
                   const entry = scores[student.id] || { classScore: 0, examScore: 0 };
                   const total = calculateTotalScore(entry.classScore, entry.examScore, sbaMax, examMax);
-                  const grade = getGESGrade(total, totalMax);
+                  const grade = getStandardGrade(total, totalMax);
                   const remarks = getGradeRemarks(grade);
 
                   return (

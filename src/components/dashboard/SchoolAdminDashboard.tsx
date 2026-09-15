@@ -89,11 +89,11 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ onNa
               <span>Launch POS Cashier</span>
             </button>
             <button
-              onClick={() => onNavigate('attendance')}
+              onClick={() => onNavigate('reports')}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs rounded-xl shadow-2xs transition-all cursor-pointer active:scale-[0.98]"
             >
-              <CalendarCheck2 className="w-3.5 h-3.5 text-sky-600" />
-              <span>Daily Roll Call</span>
+              <FileText className="w-3.5 h-3.5 text-teal-700" />
+              <span>Terminal Reports</span>
             </button>
           </div>
         </div>
@@ -115,7 +115,7 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ onNa
         <StatCard
           title="Teaching Staff"
           value={totalTeachers}
-          subtitle="All GES Certified"
+          subtitle="All Certified Staff"
           icon={GraduationCap}
           borderColor="border-emerald-600"
           iconBg="bg-emerald-50"
@@ -123,14 +123,14 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ onNa
           onClick={() => onNavigate('teachers')}
         />
         <StatCard
-          title="Today's Attendance"
-          value={`${attendanceRate}%`}
-          subtitle={`${presentToday || 26} Present Today`}
-          icon={CalendarCheck2}
-          borderColor="border-blue-600"
-          iconBg="bg-blue-50"
-          iconColor="text-blue-700"
-          onClick={() => onNavigate('attendance')}
+          title="Terminal Reports"
+          value={`${totalStudents}`}
+          subtitle="Term 3 Cards Ready"
+          icon={FileText}
+          borderColor="border-slate-800"
+          iconBg="bg-slate-100"
+          iconColor="text-slate-900"
+          onClick={() => onNavigate('reports')}
         />
         <StatCard
           title="Fee Collections (GHS)"

@@ -470,7 +470,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                   <span className="text-slate-400 text-[10px] uppercase font-bold block">Class Teacher</span>
                   <div className="font-bold text-slate-900 text-sm">{activeChildClass?.classTeacherName || 'Class Master'}</div>
-                  <div className="text-[11px] text-slate-500">GES Certified Educator</div>
+                  <div className="text-[11px] text-slate-500">Certified Educator</div>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
@@ -478,7 +478,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                   <div className="font-bold text-slate-900 text-sm">
                     {school?.currentAcademicYear || '2026/2027'} • {school?.currentTerm || 'Term 3'}
                   </div>
-                  <div className="text-[11px] text-teal-800 font-medium">Standard GES Curriculum</div>
+                  <div className="text-[11px] text-teal-800 font-medium">Standard Curriculum</div>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
@@ -486,7 +486,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                   <div className="font-bold text-teal-900 text-sm">
                     {settings.reopeningDate ? formatDate(settings.reopeningDate) : 'Sept 2026'}
                   </div>
-                  <div className="text-[11px] text-slate-500">Official GES Academic Calendar</div>
+                  <div className="text-[11px] text-slate-500">Official Academic Calendar</div>
                 </div>
               </div>
 
@@ -496,7 +496,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                   className="w-full py-3 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <FileText className="w-4 h-4" />
-                  <span>Launch Official GES Terminal Progress Report</span>
+                  <span>Launch Official Terminal Progress Report</span>
                 </button>
               </div>
             </div>
@@ -869,7 +869,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                 title: 'Next Academic Term Reopening Date & Books Collection',
                 date: 'August 2026',
                 author: 'School Administration',
-                content: `The upcoming academic term commences per the official GES academic calendar. School stationery and textbooks packs will be available for pickup at the administrative office.`
+                content: `The upcoming academic term commences per the official academic calendar. School stationery and textbooks packs will be available for pickup at the administrative office.`
               }
             ].map((notice, idx) => (
               <div key={idx} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">

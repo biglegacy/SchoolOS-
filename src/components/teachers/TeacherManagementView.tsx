@@ -288,7 +288,7 @@ export const TeacherManagementView: React.FC = () => {
                         </h3>
                         <p className="text-[11px] text-gray-500 font-mono">{teacher.staffId}</p>
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded mt-0.5">
-                          <ShieldCheck className="w-3 h-3" /> GES Certified
+                          <ShieldCheck className="w-3 h-3" /> Certified Educator
                         </span>
                       </div>
                     </div>

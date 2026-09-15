@@ -97,7 +97,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       { id: 'school_dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'students', label: 'Students', icon: Users },
       { id: 'fees', label: 'Fees', icon: CreditCard },
-      { id: 'attendance', label: 'Roll Call', icon: CalendarCheck2 },
+      { id: 'attendance', label: 'Attendance', icon: CalendarCheck2 },
       { id: 'menu', label: 'Menu', icon: Menu, onClick: onOpenMenu },
     ];
   };

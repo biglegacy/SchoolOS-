@@ -114,7 +114,7 @@ export const TemplatesSection: React.FC<{ onUseTemplate?: (text: string, audienc
             <h3 className="text-base font-bold text-slate-900">Ghanaian School SMS Templates Library</h3>
           </div>
           <p className="text-xs text-slate-500 max-w-xl">
-            Pre-approved message templates tailored for Ghanaian educational institutions, GES guidelines, PTA communiques, and bursary notices.
+            Pre-approved message templates tailored for Ghanaian educational institutions, educational guidelines, PTA communiques, and bursary notices.
           </p>
         </div>
 

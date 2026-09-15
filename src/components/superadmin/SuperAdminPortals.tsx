@@ -57,8 +57,8 @@ const PORTAL_DEFINITIONS: PortalConfigDef[] = [
     featuresList: [
       'Teacher Dashboard & Quick Stats',
       'Assigned Classrooms & Roster',
-      'Daily Attendance Marking',
-      'GES 30/70 SBA Marks Entry',
+      'Terminal Attendance Scoring',
+      'Standard 30/70 SBA Marks Entry',
       'Subject Assignments & Curriculum',
       'Terminal Assessment Remark Generator',
       'School Broadcast Notices & Alerts',
@@ -67,7 +67,7 @@ const PORTAL_DEFINITIONS: PortalConfigDef[] = [
     capabilities: [
       { title: 'Classroom & Student Access', desc: 'Strictly restricted to teacher assigned classes and subjects' },
       { title: 'SBA Marks & SBA Entry', desc: 'Continuous assessment scoring with auto Ghanaian grading scale' },
-      { title: 'Daily Attendance Roll Call', desc: 'Instant presence and absence marking with parent alerts' }
+      { title: 'Terminal Attendance Scoring', desc: 'Recorded attendance sessions out of total term attendance' }
     ],
     accentColor: 'text-teal-700',
     bgLight: 'bg-teal-50',
@@ -82,11 +82,11 @@ const PORTAL_DEFINITIONS: PortalConfigDef[] = [
     plans: ['Basic', 'Standard', 'Premium'],
     featuresList: [
       'Parent Dashboard & Children Summary',
-      'Real-time Daily Attendance Tracking',
+      'Terminal Attendance Tracking',
       'Continuous Assessment & Exam Scores',
       'Official Ghanaian Terminal PDF Reports',
       'Fee Invoicing & Payment History',
-      'Instant SMS & WhatsApp Notices',
+      'Instant SMS Notices & Alerts',
       'School Calendar & Term Events',
       'Parent Account Profile Management'
     ],
@@ -118,7 +118,7 @@ const PORTAL_DEFINITIONS: PortalConfigDef[] = [
     ],
     capabilities: [
       { title: 'Individual Academic Records', desc: 'Self-service view of termly performance and SBA scores' },
-      { title: 'GES Subject Curriculum', desc: 'Registered subject listing and class timetable' },
+      { title: 'Standard Subject Curriculum', desc: 'Registered subject listing and class timetable' },
       { title: 'Official Announcements', desc: 'Direct access to school events and termly notices' }
     ],
     accentColor: 'text-cyan-700',

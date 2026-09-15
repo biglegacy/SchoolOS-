@@ -95,7 +95,7 @@ export const SuperAdminSystemSettings: React.FC<SuperAdminSystemSettingsProps> =
               </span>
             </div>
             <p className="text-xs text-slate-300 mt-0.5">
-              Provider: <span className="font-mono text-teal-300 capitalize">{platformCommunication?.sms?.provider || 'arkesel'}</span> | WhatsApp: <span className="font-mono text-teal-300 capitalize">{platformCommunication?.whatsapp?.provider || 'meta'}</span>
+              SMS Gateway: <span className="font-mono text-teal-300 capitalize">{platformCommunication?.sms?.provider || 'arkesel'}</span> (Sender: {platformCommunication?.sms?.senderId || 'SCHOOLOS'})
             </p>
           </div>
         </div>

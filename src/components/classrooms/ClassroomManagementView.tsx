@@ -65,7 +65,7 @@ export const ClassroomManagementView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-gray-900 tracking-tight">Classrooms & Academic Streams</h2>
-          <p className="text-xs text-gray-500">Class capacity, assigned class tutors, and GES subject curriculum</p>
+          <p className="text-xs text-gray-500">Class capacity, assigned class tutors, and standard subject curriculum</p>
         </div>
 
         <button
@@ -177,7 +177,7 @@ export const ClassroomManagementView: React.FC = () => {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         title="Create Classroom Stream"
-        subtitle="Define class stream, capacity, GES subjects, and assign tutor"
+        subtitle="Define class stream, capacity, standard subjects, and assign tutor"
         maxWidth="2xl"
       >
         <form onSubmit={handleCreateClassroom} className="space-y-4">

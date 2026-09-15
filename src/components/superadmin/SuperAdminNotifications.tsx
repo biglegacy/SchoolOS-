@@ -38,7 +38,7 @@ export const SuperAdminNotifications: React.FC<SuperAdminNotificationsProps> = (
   const [notifications, setNotifications] = useState<SystemNotification[]>([
     {
       id: 'notif_1',
-      title: 'GES 2025/2026 Term 2 Academic Calendar Synchronization',
+      title: '2025/2026 Term 2 Academic Calendar Synchronization',
       message: 'All registered institutions are reminded to finalize SBA continuous assessment marks before the mid-term terminal break.',
       targetAudience: 'all_schools',
       priority: 'normal',

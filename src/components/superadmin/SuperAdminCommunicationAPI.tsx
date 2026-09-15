@@ -37,7 +37,7 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
 }) => {
   const { allSchools, allCommunicationLogs, communicationLogs } = useSchool();
 
-  const [activeTab, setActiveTab] = useState<'sms' | 'whatsapp' | 'triggers' | 'logs'>('sms');
+  const [activeTab, setActiveTab] = useState<'sms' | 'triggers' | 'logs'>('sms');
   const [settings, setSettings] = useState<PlatformCommunicationSettings>(() => {
     const s = { ...initialSettings };
     if (!s.sms?.apiUrl || s.sms.apiUrl.includes('hubtel')) {
@@ -452,16 +452,16 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
 
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">WhatsApp Gateway</span>
-            <MessageSquare className="w-4 h-4 text-emerald-700" />
+            <span className="text-[11px] font-bold uppercase tracking-wider">SMS Sender ID</span>
+            <Radio className="w-4 h-4 text-teal-700" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-base font-bold text-slate-900 capitalize">{settings.whatsapp.provider}</span>
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${settings.whatsapp.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>
-              {settings.whatsapp.isActive ? 'ACTIVE' : 'DISABLED'}
+            <span className="text-base font-bold text-slate-900 uppercase font-mono">{settings.sms.senderId || 'SCHOOLOS'}</span>
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${settings.sms.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>
+              {settings.sms.isActive ? 'ACTIVE' : 'DISABLED'}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1 font-mono">Phone ID: {settings.whatsapp.phoneNumberId || 'Not Configured'}</p>
+          <p className="text-[11px] text-slate-400 mt-1 font-mono">Gateway: Arkesel SMS REST v2</p>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
@@ -505,20 +505,6 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
           <Radio className="w-3.5 h-3.5" />
           <span>Arkesel SMS Gateway API</span>
           <span className={`w-2 h-2 rounded-full ${settings.sms.isActive && smsHasKey ? 'bg-emerald-400' : 'bg-slate-300'}`} />
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('whatsapp')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'whatsapp'
-              ? 'bg-teal-900 text-white shadow-2xs'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-          }`}
-        >
-          <MessageSquare className="w-3.5 h-3.5" />
-          <span>WhatsApp Business API</span>
-          <span className={`w-2 h-2 rounded-full ${settings.whatsapp.isActive ? 'bg-emerald-400' : 'bg-slate-300'}`} />
         </button>
 
         <button
@@ -850,167 +836,13 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
         </div>
       )}
 
-      {/* TAB 2: WhatsApp Business API Settings */}
-      {activeTab === 'whatsapp' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-900">Meta WhatsApp Business API Gateway</h3>
-                <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  Cloud API v20.0
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Deliver terminal report cards, exam summaries, and PDF receipts via official WhatsApp Business API.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-                <span className="text-xs font-bold text-slate-700">WhatsApp Gateway Status:</span>
-                <input
-                  type="checkbox"
-                  checked={settings.whatsapp.isActive}
-                  onChange={(e) => setSettings({
-                    ...settings,
-                    whatsapp: { ...settings.whatsapp, isActive: e.target.checked }
-                  })}
-                  className="w-4 h-4 rounded text-teal-700 focus:ring-teal-600"
-                />
-                <span className={`text-xs font-bold ${settings.whatsapp.isActive ? 'text-emerald-700' : 'text-slate-400'}`}>
-                  {settings.whatsapp.isActive ? 'ENABLED' : 'DISABLED'}
-                </span>
-              </label>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
-            <div className="space-y-1.5">
-              <label className="block font-bold text-slate-800">WhatsApp API Provider</label>
-              <select
-                value={settings.whatsapp.provider}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  whatsapp: { ...settings.whatsapp, provider: e.target.value as any }
-                })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600"
-              >
-                <option value="meta">Meta Cloud API (Official WhatsApp On-Premise/Cloud)</option>
-                <option value="twilio">Twilio WhatsApp Messaging Service</option>
-                <option value="infobip">Infobip WhatsApp Business Platform</option>
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block font-bold text-slate-800">Phone Number ID</label>
-              <input
-                type="text"
-                value={settings.whatsapp.phoneNumberId}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  whatsapp: { ...settings.whatsapp, phoneNumberId: e.target.value }
-                })}
-                placeholder="e.g. 10482910482019"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block font-bold text-slate-800">WhatsApp Business Account ID (WABA ID)</label>
-              <input
-                type="text"
-                value={settings.whatsapp.businessAccountId}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  whatsapp: { ...settings.whatsapp, businessAccountId: e.target.value }
-                })}
-                placeholder="e.g. 29384729103948"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block font-bold text-slate-800">Permanent Access Token</label>
-              <div className="relative">
-                <input
-                  type={showWaSecret ? 'text' : 'password'}
-                  value={settings.whatsapp.apiKey}
-                  onChange={(e) => setSettings({
-                    ...settings,
-                    whatsapp: { ...settings.whatsapp, apiKey: e.target.value }
-                  })}
-                  placeholder="Bearer EAAG..."
-                  className="w-full pl-3.5 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowWaSecret(!showWaSecret)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  {showWaSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="md:col-span-2 space-y-1.5">
-              <label className="block font-bold text-slate-800">Graph API URL</label>
-              <input
-                type="url"
-                value={settings.whatsapp.apiUrl}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  whatsapp: { ...settings.whatsapp, apiUrl: e.target.value }
-                })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600"
-              />
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-            <div className="text-xs text-slate-500">
-              {settings.whatsapp.lastTestedAt ? (
-                <span>Last tested: {new Date(settings.whatsapp.lastTestedAt).toLocaleString()} ({settings.whatsapp.lastTestStatus})</span>
-              ) : (
-                <span>WhatsApp API not yet tested</span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setTestChannel('whatsapp');
-                  setTestResult(null);
-                  setIsTestModalOpen(true);
-                }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Zap className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Test WhatsApp API</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={isSaving}
-                className="px-5 py-2 bg-teal-800 hover:bg-teal-900 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" />
-                <span>{isSaving ? 'Saving...' : 'Save WhatsApp API Settings'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: Automated Triggers */}
+      {/* TAB 2: Automated Triggers */}
       {activeTab === 'triggers' && (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
           <div className="pb-4 border-b border-slate-100">
-            <h3 className="text-sm font-bold text-slate-900">Platform-Wide Automated SMS & WhatsApp Triggers</h3>
+            <h3 className="text-sm font-bold text-slate-900">Platform-Wide Automated SMS Triggers</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Control which system events automatically dispatch communications through the central Arkesel gateway.
+              Control which system events automatically dispatch SMS communications through the central Arkesel gateway.
             </p>
           </div>
 
@@ -1331,11 +1163,10 @@ export const SuperAdminCommunicationAPI: React.FC<SuperAdminCommunicationAPIProp
                   <label className="block font-bold text-slate-700">Channel</label>
                   <select
                     value={testChannel}
-                    onChange={(e) => setTestChannel(e.target.value as any)}
+                    onChange={(e) => setTestChannel('sms')}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-600"
                   >
                     <option value="sms">SMS Gateway (Arkesel REST v2)</option>
-                    <option value="whatsapp">WhatsApp API ({settings.whatsapp.provider})</option>
                   </select>
                 </div>
 

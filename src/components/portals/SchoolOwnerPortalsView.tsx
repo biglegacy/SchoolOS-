@@ -771,7 +771,7 @@ export const SchoolOwnerPortalsView: React.FC = () => {
                                 type="button"
                                 onClick={() => setSendCredentialsUser(user)}
                                 className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
-                                title="Send Credentials via WhatsApp / SMS"
+                                title="Send Credentials via SMS"
                               >
                                 <Send className="w-4 h-4" />
                               </button>

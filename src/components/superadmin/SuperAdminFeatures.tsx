@@ -37,7 +37,7 @@ const ALL_FEATURE_ITEMS: { key: FeatureKey; label: string; group: string; descri
   { key: 'fees', label: 'Fee Collection & Receipts', group: 'Finance', description: 'Fee billing, tracking, and printed receipts' },
   { key: 'store', label: 'School Inventory & Store', group: 'Operations', description: 'Uniforms, books, inventory tracking' },
   { key: 'pos', label: 'Point of Sale (POS Cashier)', group: 'Operations', description: 'Direct cashier counter terminal' },
-  { key: 'communications', label: 'SMS & WhatsApp Broadcasts', group: 'Operations', description: 'Parent notifications and alerts' },
+  { key: 'communications', label: 'SMS Broadcasts & Alerts', group: 'Operations', description: 'Parent SMS notifications and alerts' },
   { key: 'analytics', label: 'Advanced Analytics', group: 'Executive', description: 'Financial analytics, performance insights' },
   { key: 'users_portals', label: 'Role-Based User Accounts', group: 'Governance', description: 'Granular user credential accounts' },
   { key: 'settings', label: 'School System Settings', group: 'Governance', description: 'Grading scale, school crest, and terms' },

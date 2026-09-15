@@ -702,7 +702,7 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
             )}
           </div>
 
-          {/* TWO-COLUMN WHITE CARDS: TIMETABLE & GES GUIDANCE */}
+          {/* TWO-COLUMN WHITE CARDS: TIMETABLE & CURRICULUM GUIDANCE */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             {/* Today's Teaching Schedule (White Card) */}
@@ -751,12 +751,12 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
               )}
             </div>
 
-            {/* GES Curriculum & Teacher Quick Guidance (White Card) */}
+            {/* Curriculum & Teacher Quick Guidance (White Card) */}
             <div className="bg-white text-slate-900 rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-sky-600" />
-                  <span>GES Assessment & Standard Policy</span>
+                  <span>Assessment & Standard Policy</span>
                 </h3>
               </div>
 
@@ -771,7 +771,7 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
                   <span className="font-bold text-slate-900 block text-sm">Academic Reporting & Records</span>
                   <p className="text-slate-600 text-xs leading-relaxed">
-                    Terminal assessment marks feed directly into GES-standard Terminal Reports. Subject teachers enter Continuous Assessment (SBA) and Terminal Examination scores.
+                    Terminal assessment marks feed directly into Terminal Reports. Subject teachers enter Continuous Assessment (SBA) and Terminal Examination scores.
                   </p>
                 </div>
               </div>
@@ -1211,7 +1211,7 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
         <div className="space-y-6">
           <div className="bg-white text-slate-900 rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-3">
             <div>
-              <h2 className="text-lg font-black text-slate-900">GES Terminal Report Cards</h2>
+              <h2 className="text-lg font-black text-slate-900">Terminal Report Cards</h2>
               <p className="text-xs text-slate-500">
                 Official terminal progress reports aggregating continuous assessment ({sbaMax} SBA) and terminal examination ({examMax} Exam) across all subjects
               </p>
@@ -1369,7 +1369,7 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
               {
                 title: `Submission of Term 3 SBA Continuous Assessment Marks (${sbaMax}/${examMax})`,
                 date: 'Academic Term Update',
-                sender: 'Office of Academic Affairs & GES Coordinator',
+                sender: 'Office of Academic Affairs & Academic Coordinator',
                 content: `All subject teachers are reminded to finalize and enter Continuous Assessment (${sbaMax} Marks SBA) for all assigned classrooms ahead of the terminal examination moderation.`,
                 priority: 'High',
               },
@@ -1384,7 +1384,7 @@ export const TeacherPortalView: React.FC<TeacherPortalViewProps> = ({
                 title: 'Standard Terminal Report Generation Schedule',
                 date: 'Term End Protocol',
                 sender: 'School Administration',
-                content: 'GES terminal report cards will be printed automatically once subject scores are compiled. Form masters and subject teachers may preview student results in the portal.',
+                content: 'Terminal report cards will be printed automatically once subject scores are compiled. Form masters and subject teachers may preview student results in the portal.',
                 priority: 'Normal',
               }
             ].map((notice, idx) => (

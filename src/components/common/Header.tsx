@@ -97,7 +97,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </h2>
                 {school?.status === 'active' ? (
                   <span className="hidden sm:inline-flex items-center gap-1 text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 rounded-md uppercase tracking-wider shrink-0">
-                    <CheckCircle2 className="w-2.5 h-2.5" /> GES Verified
+                    <CheckCircle2 className="w-2.5 h-2.5" /> Institution Verified
                   </span>
                 ) : (
                   <span className="hidden sm:inline-flex items-center gap-1 text-[9px] font-mono font-bold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.2 rounded-md uppercase tracking-wider shrink-0">

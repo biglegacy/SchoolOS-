@@ -70,16 +70,6 @@ export const SendCredentialsModal: React.FC<SendCredentialsModalProps> = ({
     }
   };
 
-  const handleSendWhatsApp = () => {
-    if (!normalizedPhone) {
-      alert("Please provide a valid contact phone number with country code for WhatsApp.");
-      return;
-    }
-    const url = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(messageText)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-    onToast(`Opened WhatsApp chat for ${user.fullName}`);
-  };
-
   const handleSendSMS = () => {
     if (!recipientPhone) {
       alert("Please enter a phone number for SMS delivery.");
@@ -127,11 +117,7 @@ export const SendCredentialsModal: React.FC<SendCredentialsModalProps> = ({
               className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-teal-600 focus:bg-white"
             />
           </div>
-          {normalizedPhone && (
-            <p className="text-[10px] text-teal-700 font-mono">
-              WhatsApp normalized target: +{normalizedPhone}
-            </p>
-          )}
+          </div>
         </div>
 
         {/* Message Editor */}
@@ -156,22 +142,12 @@ export const SendCredentialsModal: React.FC<SendCredentialsModalProps> = ({
 
         {/* Dispatch Options */}
         <div className="pt-2 border-t border-slate-100 space-y-2 text-xs">
-          <div className="grid grid-cols-2 gap-2">
-            {/* WhatsApp */}
-            <button
-              type="button"
-              onClick={handleSendWhatsApp}
-              className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-            >
-              <MessageSquare className="w-4 h-4" />
-              <span>Send WhatsApp</span>
-            </button>
-
+          <div>
             {/* Native SMS */}
             <button
               type="button"
               onClick={handleSendSMS}
-              className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              className="w-full py-2.5 px-3 bg-teal-800 hover:bg-teal-900 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
               <Send className="w-4 h-4" />
               <span>Send via SMS</span>

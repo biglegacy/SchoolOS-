@@ -471,7 +471,7 @@ export const SchoolSettingsView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">GES Registration / Accreditation ID</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Registration / Accreditation ID</label>
               <input
                 type="text"
                 value={formData.registrationNumber || ''}
@@ -766,13 +766,13 @@ export const SchoolSettingsView: React.FC = () => {
 
           <p className="text-xs text-slate-500">
             Configure the maximum points allocated to Class Continuous Assessment (SBA) versus Terminal Examination. 
-            All teacher score sheets, grade computations, and GES terminal reports automatically adapt to this ratio.
+            All teacher score sheets, grade computations, and terminal reports automatically adapt to this ratio.
           </p>
 
           {/* Preset Buttons */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
             {[
-              { id: '30/70', label: '30 / 70', sub: 'GES Standard', sba: 30, exam: 70 },
+              { id: '30/70', label: '30 / 70', sub: 'Standard Ratio', sba: 30, exam: 70 },
               { id: '50/50', label: '50 / 50', sub: 'Equal Weight', sba: 50, exam: 50 },
               { id: '40/60', label: '40 / 60', sub: 'Continuous Focus', sba: 40, exam: 60 },
               { id: '30/50', label: '30 / 50', sub: 'Total 80 Marks', sba: 30, exam: 50 },

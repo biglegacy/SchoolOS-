@@ -463,7 +463,7 @@ export const SuperAdminSchools: React.FC<SuperAdminSchoolsProps> = ({
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/75 text-slate-600 font-bold">
                     <th className="py-3 px-4">Institution Profile</th>
-                    <th className="py-3 px-4">Location & GES Code</th>
+                    <th className="py-3 px-4">Location & Reg Code</th>
                     <th className="py-3 px-4">Proprietor / Lead Admin</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4">Subscription</th>
@@ -495,10 +495,10 @@ export const SuperAdminSchools: React.FC<SuperAdminSchoolsProps> = ({
                         </div>
                       </td>
 
-                      {/* Location & GES Code */}
+                      {/* Location & Reg Code */}
                       <td className="py-3.5 px-4">
                         <div className="text-slate-800">{school.district || 'District'}, {school.region || 'Region'}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">GES: {school.registrationNumber || 'Pending'}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">Reg: {school.registrationNumber || 'Pending'}</div>
                       </td>
 
                       {/* Proprietor */}
@@ -1071,7 +1071,7 @@ export const SuperAdminSchools: React.FC<SuperAdminSchoolsProps> = ({
                 <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">{deleteModalSchool.id}</span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-slate-200">
-                <span className="text-slate-500 font-medium">GES Registration</span>
+                <span className="text-slate-500 font-medium">Registration Number</span>
                 <span className="font-mono font-medium text-slate-700">{deleteModalSchool.registrationNumber || 'N/A'}</span>
               </div>
               <div className="flex justify-between items-center py-1">

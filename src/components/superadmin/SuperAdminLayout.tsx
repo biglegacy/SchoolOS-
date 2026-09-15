@@ -45,7 +45,6 @@ export type SuperAdminNavId =
   | 'sub_billing'
   | 'comm_api'
   | 'comm_sms'
-  | 'comm_whatsapp'
   | 'comm_notifications'
   | 'platform_reports'
   | 'platform_audit'
@@ -92,7 +91,6 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
       case 'sub_billing': return 'Billing & Revenue';
       case 'comm_api': return 'Central Communications API';
       case 'comm_sms': return 'SMS Broadcast Service';
-      case 'comm_whatsapp': return 'WhatsApp Business Service';
       case 'comm_notifications': return 'System Notifications';
       case 'platform_reports': return 'Platform Reports & Analytics';
       case 'platform_audit': return 'Audit Logs';
@@ -148,7 +146,6 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
       items: [
         { id: 'comm_api' as SuperAdminNavId, label: 'Communications API', icon: Key },
         { id: 'comm_sms' as SuperAdminNavId, label: 'SMS Broadcast', icon: MessageSquare },
-        { id: 'comm_whatsapp' as SuperAdminNavId, label: 'WhatsApp Broadcast', icon: MessageCircle },
         { id: 'comm_notifications' as SuperAdminNavId, label: 'Notifications', icon: Bell },
       ]
     },

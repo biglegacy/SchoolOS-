@@ -259,7 +259,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: schoolData.phone || ownerData.phone,
       email: schoolData.email || ownerData.email,
       website: schoolData.website || '',
-      registrationNumber: schoolData.registrationNumber || `GES/REG/${Date.now().toString().slice(-5)}`,
+      registrationNumber: schoolData.registrationNumber || `REG/${Date.now().toString().slice(-5)}`,
       status: 'pending', // Awaiting Super Admin approval
       subscriptionPlan: schoolData.subscriptionPlan || 'basic',
       planId: schoolData.planId || 'plan_basic',

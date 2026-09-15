@@ -298,7 +298,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     <h4 className="font-bold text-slate-900 text-xs">
                       {myClass?.classTeacherName || 'Class Master / Tutor'}
                     </h4>
-                    <p className="text-[10.5px] text-slate-500">GES Certified Educator</p>
+                    <p className="text-[10.5px] text-slate-500">Certified Educator</p>
                   </div>
                 </div>
 

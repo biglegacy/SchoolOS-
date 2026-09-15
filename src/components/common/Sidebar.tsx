@@ -116,7 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             },
             { id: 'superadmin_subscriptions', label: 'Subscriptions & Plans', icon: CreditCard },
             { id: 'superadmin_features', label: 'Feature Overrides', icon: Sliders },
-            { id: 'superadmin_api', label: 'SMS & WhatsApp API', icon: Radio },
+            { id: 'superadmin_api', label: 'SMS Gateway API', icon: Radio },
             { id: 'superadmin_audit', label: 'Platform Audit Logs', icon: History },
           ]
         }
@@ -203,9 +203,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {
         groupTitle: 'ACADEMICS & ASSESSMENTS',
         items: [
-          { id: 'attendance', label: 'Daily Roll Call', icon: CalendarCheck2, featureKey: 'attendance' },
+          { id: 'attendance', label: 'Terminal Attendance', icon: CalendarCheck2, featureKey: 'attendance' },
           { id: 'results', label: 'Results & Examinations', icon: FileSpreadsheet, featureKey: 'results' },
-          { id: 'reports', label: 'GES Terminal Reports', icon: FileText, featureKey: 'reports' },
+          { id: 'reports', label: 'Terminal Reports', icon: FileText, featureKey: 'reports' },
           { id: 'promotions', label: 'Promotion Workflow', icon: ArrowUpRightSquare, featureKey: 'promotions' },
         ]
       },
@@ -220,7 +220,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {
         groupTitle: 'ENGAGEMENT & SETTINGS',
         items: [
-          { id: 'communications', label: 'SMS & WhatsApp Center', icon: MessageSquare, featureKey: 'communications' },
+          { id: 'communications', label: 'SMS Broadcast Center', icon: MessageSquare, featureKey: 'communications' },
           { id: 'analytics', label: 'Reports & Analytics', icon: BarChart3, featureKey: 'analytics' },
           { id: 'settings', label: 'School Settings', icon: Settings, featureKey: 'settings' },
         ]
@@ -282,11 +282,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </div>
 
-      {/* GES Curriculum Standard Badge */}
+      {/* Curriculum Standard Badge */}
       <div className="p-3.5 border-t border-slate-200 bg-slate-50/70 m-2 rounded-xl">
         <div className="text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center justify-between">
           <span>Curriculum Standard</span>
-          <span className="font-mono text-teal-700 font-bold">● GES 30/70</span>
+          <span className="font-mono text-teal-700 font-bold">● Standard 30/70</span>
         </div>
         <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden mb-1.5">
           <div className="h-full bg-teal-600 rounded-full" style={{ width: '85%' }}></div>

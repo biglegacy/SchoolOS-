@@ -194,7 +194,7 @@ export const PortalDetailsModal: React.FC<PortalDetailsModalProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-emerald-800">
-                Authorized for GES 30/70 SBA continuous scoring, attendance tracking, and class management.
+                Authorized for continuous assessment scoring, attendance tracking, and class management.
               </p>
             </div>
           )}

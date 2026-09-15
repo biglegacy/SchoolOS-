@@ -7,7 +7,7 @@ export interface GradeInfo {
 }
 
 /**
- * Standard Ghana GES / WAEC Grading System for Basic & Secondary Education
+ * Standard Ghana Educational / WAEC Grading System for Basic & Secondary Education
  * Supports normalizing scores when assessment max total is not 100 (e.g. 30/50 = 80 total).
  */
 export const calculateGhanaGrade = (score: number, maxScore: number = 100): GradeInfo => {
@@ -24,9 +24,11 @@ export const calculateGhanaGrade = (score: number, maxScore: number = 100): Grad
   return { grade: 'F', remark: 'Fail', points: 9 };
 };
 
-export const getGESGrade = (score: number, maxScore: number = 100): 'A' | 'B+' | 'B' | 'C' | 'D' | 'E' | 'F' => {
+export const getStandardGrade = (score: number, maxScore: number = 100): 'A' | 'B+' | 'B' | 'C' | 'D' | 'E' | 'F' => {
   return calculateGhanaGrade(score, maxScore).grade;
 };
+
+export const getGESGrade = getStandardGrade;
 
 export const getGradeRemarks = (grade: string): string => {
   switch (grade) {
