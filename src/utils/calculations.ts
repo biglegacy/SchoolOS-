@@ -28,7 +28,7 @@ export const getStandardGrade = (score: number, maxScore: number = 100): 'A' | '
   return calculateGhanaGrade(score, maxScore).grade;
 };
 
-export const getGESGrade = getStandardGrade;
+export const getAcademicGrade = getStandardGrade;
 
 export const getGradeRemarks = (grade: string): string => {
   switch (grade) {

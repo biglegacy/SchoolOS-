@@ -167,6 +167,9 @@ export interface Student {
   houseOrTeam?: string;
   promotionStatus?: 'PROMOTED' | 'NOT PROMOTED' | 'PROMOTED ON TRIAL' | 'PENDING' | 'GRADUATED';
   nextClass?: string;
+  attendancePresent?: number;
+  attendanceTotal?: number;
+  attendanceRemarks?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSchool } from '../../contexts/SchoolContext';
 import { Student } from '../../types';
@@ -10,29 +10,32 @@ import {
   Award, 
   Calendar, 
   Clock, 
-  CheckCircle2,
-  CalendarCheck2,
-  MessageSquare,
-  Layers,
-  Sparkles,
-  MapPin,
-  TrendingUp,
-  Download,
-  GraduationCap,
-  CreditCard,
-  Receipt,
-  AlertCircle
+  CheckCircle2, 
+  CalendarCheck2, 
+  MessageSquare, 
+  Layers, 
+  Sparkles, 
+  MapPin, 
+  TrendingUp, 
+  Download, 
+  GraduationCap, 
+  CreditCard, 
+  Receipt, 
+  AlertCircle 
 } from 'lucide-react';
 import { TerminalReportModal } from '../reports/TerminalReportModal';
 import { formatGHS, formatDate } from '../../utils/formatting';
 import { calculateStudentFeeBalance } from '../../utils/calculations';
+import { NavTabId } from '../common/Sidebar';
 
 interface StudentPortalViewProps {
   initialSubTab?: 'overview' | 'results' | 'reports' | 'fees' | 'attendance' | 'timetable' | 'notices';
+  onNavigate?: (tab: NavTabId) => void;
 }
 
 export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
-  initialSubTab = 'overview'
+  initialSubTab = 'overview',
+  onNavigate
 }) => {
   const { currentUser } = useAuth();
   const { 
@@ -49,6 +52,33 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'results' | 'reports' | 'fees' | 'attendance' | 'timetable' | 'notices'>(initialSubTab);
   const [isReportOpen, setIsReportOpen] = useState(false);
+
+  // Sync internal active subtab with initialSubTab changes from bottom nav or navigation
+  useEffect(() => {
+    if (initialSubTab) {
+      if (initialSubTab === 'reports') {
+        setIsReportOpen(true);
+      } else {
+        setActiveSubTab(initialSubTab);
+      }
+    }
+  }, [initialSubTab]);
+
+  const handleSwitchTab = (tabId: 'overview' | 'results' | 'reports' | 'fees' | 'attendance' | 'timetable' | 'notices') => {
+    if (tabId === 'reports') {
+      setIsReportOpen(true);
+      if (onNavigate) onNavigate('reports');
+      return;
+    }
+    setActiveSubTab(tabId);
+    if (onNavigate) {
+      if (tabId === 'overview') onNavigate('student_portal');
+      else if (tabId === 'results') onNavigate('results');
+      else if (tabId === 'attendance') onNavigate('attendance');
+      else if (tabId === 'fees') onNavigate('fees');
+      else if (tabId === 'notices') onNavigate('communications');
+    }
+  };
 
   // Match student by currentUser studentId or email/phone or first active student
   const me: Student | undefined = students.find(s => 
@@ -134,14 +164,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setActiveSubTab('fees')}
+              onClick={() => handleSwitchTab('fees')}
               className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               <CreditCard className="w-3.5 h-3.5 text-teal-700" />
               <span>Fee Status ({paymentStatus})</span>
             </button>
             <button
-              onClick={() => setIsReportOpen(true)}
+              onClick={() => handleSwitchTab('reports')}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               <FileText className="w-4 h-4 text-white" />
@@ -166,13 +196,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             return (
               <button
                 key={tab.id}
-                onClick={() => {
-                  if (tab.id === 'reports') {
-                    setIsReportOpen(true);
-                  } else {
-                    setActiveSubTab(tab.id as any);
-                  }
-                }}
+                onClick={() => handleSwitchTab(tab.id as any)}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
                   isActive
                     ? 'bg-slate-900 text-white shadow-xs'

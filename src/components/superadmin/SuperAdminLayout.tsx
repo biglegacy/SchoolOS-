@@ -402,13 +402,72 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
         </header>
 
         {/* Scrollable Content */}
-        <main className="flex-1 overflow-y-auto p-3.5 sm:p-7 bg-slate-50/90 pb-20 md:pb-7">
+        <main className="flex-1 overflow-y-auto p-3.5 sm:p-7 bg-slate-50/90 pb-24 md:pb-7">
           <div className="max-w-7xl mx-auto space-y-6">
             {children}
           </div>
         </main>
       </div>
 
+      {/* Super Admin Mobile Bottom Navigation */}
+      <nav 
+        id="superadmin-mobile-bottom-nav"
+        aria-label="Super Admin Mobile Navigation"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-1.5 py-1 flex items-center justify-around shadow-lg safe-area-bottom select-none"
+      >
+        {[
+          { id: 'overview_dashboard' as SuperAdminNavId, label: 'Overview', icon: LayoutDashboard },
+          { 
+            id: 'schools_all' as SuperAdminNavId, 
+            label: 'Schools', 
+            icon: Building2, 
+            badge: pendingSchoolsCount > 0 ? pendingSchoolsCount : undefined 
+          },
+          { id: 'sub_plans' as SuperAdminNavId, label: 'Plans', icon: CreditCard },
+          { id: 'comm_api' as SuperAdminNavId, label: 'Comms API', icon: Key },
+          { id: 'menu' as const, label: 'Menu', icon: Menu },
+        ].map((item) => {
+          const Icon = item.icon;
+          const isMenu = item.id === 'menu';
+          const isActive = isMenu 
+            ? isMobileDrawerOpen 
+            : (activeNav === item.id || (!isMobileDrawerOpen && item.id === 'schools_all' && activeNav.startsWith('schools_')));
+
+          return (
+            <button
+              key={item.id}
+              id={`superadmin-bottom-nav-${item.id}`}
+              type="button"
+              aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
+              onClick={() => {
+                if (isMenu) {
+                  setIsMobileDrawerOpen(prev => !prev);
+                } else {
+                  handleNavClick(item.id as SuperAdminNavId);
+                }
+              }}
+              className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 min-h-[48px] rounded-xl transition-all cursor-pointer relative ${
+                isActive
+                  ? 'text-teal-700 font-bold bg-teal-50/80 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 active:bg-slate-100 font-medium'
+              }`}
+            >
+              <div className="relative">
+                <Icon className={`w-4 h-4 mb-0.5 transition-transform ${isActive ? 'scale-110 text-teal-700' : 'text-slate-400'}`} />
+                {item.badge && item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full leading-tight">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10.5px] leading-tight whitespace-nowrap text-center">
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 };

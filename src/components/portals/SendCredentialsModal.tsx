@@ -117,7 +117,6 @@ export const SendCredentialsModal: React.FC<SendCredentialsModalProps> = ({
               className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-teal-600 focus:bg-white"
             />
           </div>
-          </div>
         </div>
 
         {/* Message Editor */}
